@@ -9,7 +9,7 @@ describe("catalog", () => {
   test("every structure and species has a renderer and flavor", () => {
     for (const s of STRUCTURES) expect(STRUCTURE_REGISTRY[s.id]).toBeDefined();
     for (const s of SPECIES) { expect(SPECIES_SPRITES[s.id]).toBeDefined(); expect(SPECIES_FLAVOR[s.id]).toBeDefined(); }
-    expect(STRUCTURES).toHaveLength(7);
+    expect(STRUCTURES).toHaveLength(8);
     expect(SPECIES).toHaveLength(7);
   });
   test("structures fit inside the bowl and stand on the sand", () => {

@@ -11,6 +11,7 @@ export const STRUCTURES: CatalogEntry<StructureId>[] = [
   { id: "parthenon", label: "Parthenon", emoji: "🏛️", blurb: "Marble columns on the Acropolis" },
   { id: "stonehenge", label: "Stonehenge", emoji: "🪨", blurb: "Standing stones on Salisbury Plain" },
   { id: "pineapple", label: "Pineapple", emoji: "🍍", blurb: "Who lives in one under the sea?" },
+  { id: "dallasCityHall", label: "Dallas City Hall", emoji: "🏢", blurb: "Pei's inverted pyramid — with a sign in the plaza" },
 ];
 
 export const SPECIES: CatalogEntry<SpeciesId>[] = [

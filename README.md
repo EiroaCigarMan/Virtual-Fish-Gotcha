@@ -1,13 +1,13 @@
 # 🐠 tamagotchi-fish
 
-A cozy, 8-bit fish tamagotchi that lives in your browser. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and seven structures.
+A cozy, 8-bit fish tamagotchi that lives in your browser. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and eight structures.
 
 <p align="center"><img src="docs/img/goldfish-bowl.png" width="480" alt="Pixel-art goldfish swimming in a round bowl above a castle whose clock reads 5:30"></p>
 
 - Pixel-art scene rendered on a 160×144 `<canvas>` (scaled up crisp), React for the panels.
 - Stats **Full / Happy / Clean** decay in real time — including while the tab is closed (computed from the last-seen timestamp on load).
 - The fish never dies; low stats just change its mood, speed, and the water colour.
-- **Seven structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, and a certain pineapple. Swap any time from the **Tank** tab — it's cosmetic.
+- **Eight structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid, with a lettered picket sign in the plaza), and a certain pineapple. Swap any time from the **Tank** tab — it's cosmetic.
 - **Seven fish**: Goldfish (default), Betta, Endler's Livebearer, Chili Rasbora, Scarlet Badis, Pea Puffer, White Cloud Mountain Minnow. Each has its own sprite, swim speed, and the two tiny ones swim as a school. Picking a new species starts a new fish (it asks first); the structure and clock format carry over.
 - Clock shows the current time in **12h or 24h** (toggle in Settings, persisted).
 - Everything is stored in `localStorage`. Fully static: `dist/` deploys anywhere.
@@ -57,9 +57,10 @@ src/
              (schema v2; v1 saves migrate to goldfish + castle), time.ts,
              useFishGame.ts (React hook that owns state, ticks decay, persists)
   canvas/    the scene: engine.ts (loop, fish + school AI, bubbles, pellets, water tint),
-             structures.ts (registry of the seven landmarks), castle.ts, clock.ts (the
+             structures.ts (registry of the eight landmarks), castle.ts, clock.ts (the
              shared glowing clock panel + AM/PM pip), pixelFont.ts,
-             sprites.ts (per-species frames + mood tinting)
+             sprites.ts (per-species frames + mood tinting), pixelFont.ts (3x5 glyphs:
+             digits for the clocks, uppercase for lettering a structure)
   components/ FishCanvas (mounts the engine), StatsPanel, SidePanel (tabs) →
              ActionsPanel (Care), TankPanel (structure + fish pickers), SettingsPanel
 ```
@@ -75,7 +76,7 @@ src/
 ## Adding a structure or a fish
 
 1. Add the id to `StructureId` / `SpeciesId` in `src/game/types.ts` and an entry in `src/game/catalog.ts` (label, emoji, blurb; species also get `speed` + `school`).
-2. Structure: add a `Structure` to `src/canvas/structures.ts` — draw with `rect`/`disc`, call `drawClockPanel` for the clock (36×12, keep it below y≈110) and `drawMeridiemPip` for AM/PM, and set `bounds` (bottom must be the sand line, y = 124). If it has an opening at least 16×10 px, list it in `passages` and the fish will swim through it.
+2. Structure: add a `Structure` to `src/canvas/structures.ts` — draw with `rect`/`disc`, call `drawClockPanel` for the clock (36×12, keep it below y≈110) and `drawMeridiemPip` for AM/PM, and set `bounds` (bottom must be the sand line, y = 124). If it has an opening at least 16×10 px, list it in `passages` and the fish will swim through it. To letter something (Dallas City Hall's sign), use `drawText`/`textWidth` from `pixelFont.ts` at scale 1 and keep it clear of the clock panel.
 3. Fish: add a `SpeciesSprite` to `src/canvas/sprites.ts` — right-facing frames using the shared palette letters, plus the `eye` and `mouth` pixel positions used by the mood overlays.
 4. `bun test` checks the registries line up, sprites are rectangular, and structures fit the bowl. `bun run snapshot` shows you the result without a browser.
 

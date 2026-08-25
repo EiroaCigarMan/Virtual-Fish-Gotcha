@@ -5,6 +5,7 @@
  */
 import { CASTLE, drawCastle } from "./castle";
 import { type Box, CLOCK_H, CLOCK_W, disc, drawClockPanel, drawMeridiemPip, rect } from "./clock";
+import { drawText, textWidth } from "./pixelFont";
 import type { StructureId, TimeFormat } from "../game/types";
 
 export interface Structure {
@@ -262,6 +263,68 @@ const pineapple: Structure = {
   },
 };
 
+// ---------------------------------------------------------------- Dallas City Hall (Dallas)
+/**
+ * I.M. Pei's inverted pyramid, seen head-on from the plaza: the facade leans out 1px every
+ * 4 rows, so each floor overhangs the one below and the whole thing is widest at the roof.
+ * A picket sign is planted in the plaza to the right, deliberately clear of the clock panel.
+ */
+const dallasCityHall: Structure = {
+  id: "dallasCityHall",
+  // the pyramid (42..118 at the roof) plus the sign standing in the plaza beside it
+  bounds: { x: 42, y: 52, w: 81, h: 72 },
+  draw(ctx, now, fmt) {
+    const C = {
+      conc: "#b9b3a6", concL: "#dcd6c8", concD: "#8b8579", soffit: "#6d6862",
+      glass: "#2b3a4e", glassL: "#40587a", mull: "#9a9488",
+      post: "#8a5a2a", postD: "#5e3c1a", board: "#f2e8d5", boardD: "#c0b295", ink: "#8f1d1d",
+    };
+    const TOP = 52;
+    const hwAt = (y: number) => 20 + Math.round((SAND_Y - y) / 4);
+    // the leaning facade, row by row
+    for (let y = TOP; y < SAND_Y; y++) {
+      const hw = hwAt(y);
+      rect(ctx, CX - hw, y, hw * 2 + 1, 1, C.conc);
+      rect(ctx, CX - hw, y, 1, 1, C.concL);
+      rect(ctx, CX + hw, y, 1, 1, C.concD);
+    }
+    rect(ctx, CX - hwAt(TOP), TOP, hwAt(TOP) * 2 + 1, 1, C.concL); // roof parapet, catching the light
+    // six recessed window bands; the solid 6px end wedges are Pei's blank side walls
+    for (let i = 0; i < 6; i++) {
+      const by = TOP + 3 + i * 10;
+      const band = (y: number, c: string) => { const hw = hwAt(y) - 6; rect(ctx, CX - hw, y, hw * 2 + 1, 1, c); };
+      band(by - 1, C.soffit); // deep reveal under the overhang above
+      for (let y = by; y < by + 4; y++) band(y, y === by ? C.glassL : C.glass);
+      band(by + 4, C.concL); // sill
+      const mh = hwAt(by + 2) - 6;
+      for (let x = CX - mh + 2; x < CX + mh; x += 5) rect(ctx, x, by, 1, 4, C.mull);
+    }
+    // plaza level: recessed lobby glass behind three fat concrete columns
+    for (let y = 112; y < SAND_Y; y++) { const hw = hwAt(y) - 4; rect(ctx, CX - hw, y, hw * 2 + 1, 1, C.glass); }
+    for (const px of [62, 79, 96]) {
+      rect(ctx, px, 108, 5, SAND_Y - 108, C.conc);
+      rect(ctx, px, 108, 1, SAND_Y - 108, C.concL);
+      rect(ctx, px + 4, 108, 1, SAND_Y - 108, C.concD);
+      rect(ctx, px - 1, 108, 7, 1, C.concD);
+    }
+    // the sign: post first, then the board, then four centred lines of 3x5 type
+    const S = { x: 97, y: 88, w: 27, h: 27 };
+    const postY = S.y + S.h;
+    rect(ctx, 109, postY, 3, SAND_Y - postY, C.post);
+    rect(ctx, 111, postY, 1, SAND_Y - postY, C.postD);
+    rect(ctx, S.x, S.y, S.w, S.h, C.boardD);
+    rect(ctx, S.x + 1, S.y + 1, S.w - 2, S.h - 2, C.board);
+    ["SAVE", "DALLAS", "CITY", "HALL!"].forEach((line, i) => {
+      const w = textWidth(line, 1);
+      drawText(ctx, line, S.x + 1 + Math.floor((S.w - 2 - w) / 2), S.y + 2 + i * 6, 1, C.ink);
+    });
+    // clock sits in the fifth-floor band, nudged left so the sign never covers it
+    const meridiem = drawClockPanel(ctx, clockBox(92, 58), now, fmt, C.concD);
+    rect(ctx, CX, 48, 1, 4, C.concD); // rooftop mast
+    drawMeridiemPip(ctx, CX, 46, meridiem, "#1c1730");
+  },
+};
+
 const castle: Structure = {
   id: "castle",
   // body + both towers (towers stick out 6px each side and rise 8px above the body)
@@ -270,5 +333,5 @@ const castle: Structure = {
 };
 
 export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
-  castle, reunionTower, eiffelTower, bigBen, parthenon, stonehenge, pineapple,
+  castle, reunionTower, eiffelTower, bigBen, parthenon, stonehenge, pineapple, dallasCityHall,
 };
