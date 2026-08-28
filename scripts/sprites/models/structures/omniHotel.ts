@@ -8,10 +8,10 @@ import { bakeLoc, clockRecess, withHole } from "./common";
  * up with words and pictures. Here the strips are the runtime's LED field (scene 38..122 ×
  * 71..103, one cell per logical unit); the bake supplies the glass, the strip lines, the
  * windows, the "OMNI HOTEL" crown and the podium with the clock recess (x −18..18, y 2..18).
- * Night frame: windows lit. Model space: ground y = 0, x = 0 at scene 80.
+ * Night frame: every window dark — after dark only the LED strips and the neon sign glow. Model space: ground y = 0, x = 0 at scene 80.
  */
 const SLAB = hex("#232a3a"), SLAB_L = hex("#3b4458"), CROWN = hex("#454c60"), CROWN_L = hex("#8a92a8");
-const GLASS = hex("#1d2839"), GLASS_L = hex("#31465f"), WIN_LIT = hex("#ffe6a6"), WIN_OFF = hex("#0d1420");
+const GLASS = hex("#1d2839"), GLASS_L = hex("#31465f"), WIN_OFF = hex("#0d1420");
 const STRIP = hex("#101724"), STRIP_EDGE = hex("#2b3448");
 const PODIUM = hex("#5a5f6e"), PODIUM_L = hex("#8d93a4");
 
@@ -48,7 +48,7 @@ export const omniHotel: StructureModel = {
       const cu = ((x % 2.2) + 2.2) % 2.2;
       if (cu > 0.35 && cu < 1.95 && fy > 0.8 && fy < 1.85) {
         const i = Math.floor(x / 2.2) + Math.floor(y / 2) * 53;
-        if (night) return hash(i, 5) < 0.18 ? mixRGB(WIN_LIT, GLASS, 0.45) : WIN_OFF; // sparse and dim, so the LED strips own the facade
+        if (night) return WIN_OFF; // no window lights: the LED strips and the neon sign are the show
         return hash(i, 0) < 0.4 ? GLASS_L : GLASS;
       }
       return mixRGB(SLAB, SLAB_L, 0.5 + z / DEPTH);
