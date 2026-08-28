@@ -24,7 +24,10 @@ export interface StructureModel {
   frame: Frame;
   at: { x: number; y: number };
   view: View;
-  build(): Part[];
+  /** Number of night variants (lit windows, lamp patterns…). 0/undefined = the runtime dims the day sprite instead. */
+  nightFrames?: number;
+  /** `night` selects a night variant; `frame` (0..nightFrames-1) picks which. */
+  build(opts?: { night?: boolean; frame?: number }): Part[];
 }
 
 export const GROUND_Y = 124; // scene row the ground plane maps to

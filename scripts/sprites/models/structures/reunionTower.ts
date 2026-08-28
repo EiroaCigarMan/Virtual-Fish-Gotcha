@@ -52,6 +52,14 @@ const baseTex: TexFn = (x, y, z) => {
   return BASE;
 };
 
+/** At night every window is lit and the lobby glass glows. */
+const baseTexNight: TexFn = (x, y, z) => {
+  const c = baseTex(x, y, z);
+  if (c === WIN || c === WIN_DIM) return LAMP_NIGHT_GOLD;
+  if (c === GLASS) return mixRGB(WIN, GLASS, 0.5);
+  return c;
+};
+
 /** Banded columns: a dark band every 4 units, a lighter left face. */
 const colTex: TexFn = (x, y) => {
   const cx = Math.round(x / 3) * 3, lx = x - cx;
@@ -65,7 +73,15 @@ const colTex: TexFn = (x, y) => {
  * Geodesic lamp net on the ball: a triangular lattice in (lon, lat) space, lamps dotted along
  * the three line families and brighter where they cross; dark navy between.
  */
-const ballTex: TexFn = (x, y, z) => {
+/**
+ * Night lamp programs, one per baked night frame: 0 every lamp lit; 1–3 a chase (each third of
+ * the lamps along the lattice lines in turn); 4–6 a sweep (a bright latitude band low → high).
+ */
+type Program = { kind: "day" } | { kind: "steady" } | { kind: "chase"; third: number } | { kind: "sweep"; center: number };
+const PROGRAMS: Program[] = [{ kind: "steady" }, { kind: "chase", third: 0 }, { kind: "chase", third: 1 }, { kind: "chase", third: 2 }, { kind: "sweep", center: -7 }, { kind: "sweep", center: 0 }, { kind: "sweep", center: 7 }];
+const LAMP_NIGHT = hex("#fff8dc"), LAMP_NIGHT_GOLD = hex("#ffe27a"), LAMP_OFF = hex("#5a4a2a"), BALL_NIGHT = hex("#0d1226");
+
+const ballTexFor = (prog: Program): TexFn => (x, y, z) => {
   const px = x - BX, py = y - BY, pz = z;
   const lat = Math.asin(Math.max(-1, Math.min(1, py / BR))), lon = Math.atan2(px, pz);
   const u = lon * BR, v = lat * BR;
@@ -77,22 +93,36 @@ const ballTex: TexFn = (x, y, z) => {
     const d = Math.abs(c / P - Math.round(c / P)) * P;
     if (d < LW) { onLine++; if (d < bestD) { bestD = d; along = u * -ny + v * nx; } }
   }
-  if (onLine >= 2) return LAMP; // node
+  const night = prog.kind !== "day";
+  const lit = (idx: number): boolean => {
+    if (prog.kind === "day" || prog.kind === "steady") return true;
+    if (prog.kind === "chase") return ((idx % 3) + 3) % 3 === prog.third;
+    return Math.abs(v - prog.center) < 3.2; // sweep: a latitude band
+  };
+  if (onLine >= 2) return night ? (lit(Math.round(u / 2.1)) ? LAMP_NIGHT : LAMP_OFF) : LAMP; // node
   if (onLine === 1) {
-    const s = Math.abs(along / 2.1 - Math.round(along / 2.1)) * 2.1;
-    if (s < 0.5) return hash(Math.round(along / 2.1), Math.round(u + v)) < 0.5 ? LAMP : LAMP_GOLD;
-    return mixRGB(LAMP_DIM, BALL_EDGE, 0.55);
+    const idx = Math.round(along / 2.1);
+    const s = Math.abs(along / 2.1 - idx) * 2.1;
+    if (s < 0.5) {
+      if (night) return lit(idx) ? (hash(idx, Math.round(u + v)) < 0.5 ? LAMP_NIGHT : LAMP_NIGHT_GOLD) : LAMP_OFF;
+      return hash(idx, Math.round(u + v)) < 0.5 ? LAMP : LAMP_GOLD;
+    }
+    return night ? mixRGB(LAMP_OFF, BALL_NIGHT, 0.6) : mixRGB(LAMP_DIM, BALL_EDGE, 0.55);
   }
   // rim sparkle so the silhouette twinkles
-  if (Math.abs(pz) < BR * 0.25 && hash(Math.floor(u * 2), Math.floor(v * 2)) > 0.985) return LAMP_GOLD;
-  return mixRGB(BALL, BALL_EDGE, 0.5 - pz / BR / 2);
+  if (Math.abs(pz) < BR * 0.25 && hash(Math.floor(u * 2), Math.floor(v * 2)) > 0.985) return night ? LAMP_NIGHT_GOLD : LAMP_GOLD;
+  return night ? mixRGB(BALL_NIGHT, BALL, 0.4 - pz / BR / 3) : mixRGB(BALL, BALL_EDGE, 0.5 - pz / BR / 2);
 };
+const ballTex: TexFn = ballTexFor({ kind: "day" });
 
 export const reunionTower: StructureModel = {
   frame: { x: -27, y: 0, w: 54, h: 88 },
   at: { x: 53, y: 36 },
   view: { yaw: -7, pitch: 7 },
-  build(): Part[] {
+  nightFrames: PROGRAMS.length,
+  build(opts): Part[] {
+    const night = !!opts?.night;
+    const prog = night ? PROGRAMS[opts?.frame ?? 0] : ({ kind: "day" } as Program);
     const base = bakeLoc(transform(box(BW, BH, BD, BASE, [4, 2, 2]), { t: [0, BH / 2, 0] }));
     // clock recess in the base facade: model x -18..18, y 2..18 (scene 62..98 × 106..122)
     const recess = clockRecess(-18, 18, 2, 18, BD / 2, BASE_L);
@@ -103,11 +133,11 @@ export const reunionTower: StructureModel = {
       transform(box(1.2, 1, 1.2, LAMP_GOLD), { t: [BX, BY + BR + 5.6, 0] }),
     );
     return [
-      part(base, { tex: withHole(baseTex, -18, 18, 2, 18, BD / 2), ks: 0.2, shininess: 14 }),
+      part(base, { tex: withHole(night ? baseTexNight : baseTex, -18, 18, 2, 18, BD / 2), ks: 0.2, shininess: 14, emissive: night ? 0.75 : 1 }),
       part(recess, { ks: 0.1 }),
-      part(columns, { tex: colTex, ks: 0.15, shininess: 10 }),
-      part(ball, { tex: ballTex, ks: 0.25, shininess: 20, emissive: 1.3 }),
-      part(mast, { ks: 0.2, emissive: 1.2 }),
+      part(columns, { tex: colTex, ks: 0.15, shininess: 10, emissive: night ? 0.55 : 1 }),
+      part(ball, { tex: night ? ballTexFor(prog) : ballTex, ks: 0.25, shininess: 20, emissive: night ? 1.9 : 1.3 }),
+      part(mast, { ks: 0.2, emissive: night ? 1.6 : 1.2 }),
     ];
   },
 };

@@ -88,11 +88,19 @@ for (const [id, model] of Object.entries(STRUCTURE_MODELS)) {
   if (only && !only.includes(id)) continue;
   const img = render(model.build(), model.frame, model.view);
   structRows.push([{ name: id, x: 0, y: 0, w: img.width, h: img.height, img }]);
-  structManifest.push(`  ${id}: { x: ${model.at.x}, y: ${model.at.y}, w: ${model.frame.w}, h: ${model.frame.h}, sy: __SY${structRows.length - 1}__ },`);
-  console.log(`structure ${id}: ${model.frame.w}×${model.frame.h} at (${model.at.x},${model.at.y})`);
+  const dayRow = structRows.length - 1;
+  const nightRows: number[] = [];
+  for (let k = 0; k < (model.nightFrames ?? 0); k++) {
+    const nimg = render(model.build({ night: true, frame: k }), model.frame, model.view);
+    structRows.push([{ name: `${id}#night${k}`, x: 0, y: 0, w: nimg.width, h: nimg.height, img: nimg }]);
+    nightRows.push(structRows.length - 1);
+  }
+  const night = nightRows.length ? `, night: [${nightRows.map((r) => `__SY${r}__`).join(", ")}]` : "";
+  structManifest.push(`  ${id}: { x: ${model.at.x}, y: ${model.at.y}, w: ${model.frame.w}, h: ${model.frame.h}, sy: __SY${dayRow}__${night} },`);
+  console.log(`structure ${id}: ${model.frame.w}×${model.frame.h} at (${model.at.x},${model.at.y})${nightRows.length ? ` + ${nightRows.length} night frames` : ""}`);
 }
 const structSheet = sheet(structRows);
-for (let i = 0; i < structRows.length; i++) structManifest[i] = structManifest[i].replace(`__SY${i}__`, String(structRows[i][0].y / PX));
+for (let i = 0; i < structManifest.length; i++) structManifest[i] = structManifest[i].replace(/__SY(\d+)__/g, (_, r) => String(structRows[Number(r)][0].y / PX));
 
 const fishPng = toPng(fishSheet.w, fishSheet.h, fishSheet.placed);
 const structPng = toPng(structSheet.w, structSheet.h, structSheet.placed);

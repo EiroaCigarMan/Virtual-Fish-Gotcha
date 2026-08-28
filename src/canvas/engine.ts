@@ -1,9 +1,10 @@
-import { type Atlas, FISH, PX } from "./atlas";
+import { type Atlas, FISH, PX, STRUCTURE_SHEET_SIZE, makeNightSheet } from "./atlas";
 import { FishPainter } from "./fish";
 import { browserPlatform, type Platform } from "./platform";
 import { STRUCTURE_REGISTRY, drawStructure } from "./structures";
 import { TANK_GEOMS, type TankGeom } from "./tank";
 import { SPECIES_FLAVOR } from "../game/catalog";
+import { isNight } from "../game/solar";
 import type { FishMood, SpeciesId, StructureId, TankShape, TimeFormat } from "../game/types";
 
 /** Logical scene size. Everything below reasons in these units; the canvas is PX× bigger. */
@@ -79,13 +80,17 @@ export class FishEngine {
   private maskFor: StructureId | null = null;
   private scratch: HTMLCanvasElement | null = null;
   private geom: TankGeom = TANK_GEOMS.bowl;
+  /** Wall clock — injectable so headless renders can pin a time (and a day/night). */
+  private clock: () => Date;
+  private night = false;
 
-  constructor(canvas: HTMLCanvasElement, platform: Platform = browserPlatform) {
+  constructor(canvas: HTMLCanvasElement, platform: Platform = browserPlatform, clock: () => Date = () => new Date()) {
     canvas.width = W * PX; canvas.height = H * PX;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2d context unavailable");
     this.ctx = ctx;
     this.platform = platform;
+    this.clock = clock;
     this.painter = new FishPainter(platform);
     this.spawnSchool(this.inputs.species);
     this.seedFloor();
@@ -111,7 +116,7 @@ export class FishEngine {
 
   /** Sprite sheets arrive asynchronously; until then the bowl renders empty. */
   setAtlas(atlas: Atlas) {
-    this.atlas = atlas;
+    this.atlas = { ...atlas, structuresNight: makeNightSheet(this.platform, atlas.structures, STRUCTURE_SHEET_SIZE.w, STRUCTURE_SHEET_SIZE.h) };
     this.maskFor = null;
   }
 
@@ -135,7 +140,7 @@ export class FishEngine {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W * PX, H * PX);
     ctx.setTransform(PX, 0, 0, PX, 0, 0);
-    drawStructure(ctx, this.atlas, id, new Date(), this.inputs.timeFormat);
+    drawStructure(ctx, this.atlas, id, this.clock(), this.inputs.timeFormat);
     const data = ctx.getImageData(0, 0, W * PX, H * PX).data;
     this.mask.fill(0);
     for (let py = 0; py < H * PX; py++) {
@@ -341,22 +346,26 @@ export class FishEngine {
     const ctx = this.ctx;
     const G = this.geom;
     const dirt = 1 - this.inputs.cleanliness / 100; // 0 clean … 1 filthy
+    const now = this.clock();
+    this.night = isNight(now.getTime());
+    const night = this.night;
+    const mixc = (day: [number, number, number], dark: [number, number, number], k = 1) => `rgb(${Math.round(day[0] + (dark[0] - day[0]) * k)},${Math.round(day[1] + (dark[1] - day[1]) * k)},${Math.round(day[2] + (dark[2] - day[2]) * k)})`;
     ctx.setTransform(PX, 0, 0, PX, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
     // room: a dim vertical gradient with a soft pool of light behind the tank
     const room = ctx.createLinearGradient(0, 0, 0, H);
-    room.addColorStop(0, "#241d3d"); room.addColorStop(1, "#120e20");
+    room.addColorStop(0, night ? "#100c22" : "#241d3d"); room.addColorStop(1, night ? "#07060f" : "#120e20");
     ctx.fillStyle = room; ctx.fillRect(0, 0, W, H);
     const midY = (G.rimY + G.floorY) / 2;
     const pool = ctx.createRadialGradient(G.cx, midY - 10, 10, G.cx, midY, 90);
-    pool.addColorStop(0, "rgba(120,110,190,0.18)"); pool.addColorStop(1, "rgba(120,110,190,0)");
+    pool.addColorStop(0, night ? "rgba(90,110,200,0.10)" : "rgba(120,110,190,0.18)"); pool.addColorStop(1, "rgba(120,110,190,0)");
     ctx.fillStyle = pool; ctx.fillRect(0, 0, W, H);
     // table: wood with a lit front edge
     const tableY = G.tableY;
     const wood = ctx.createLinearGradient(0, tableY, 0, H);
-    wood.addColorStop(0, "#5a3f3a"); wood.addColorStop(0.15, "#3f2c2a"); wood.addColorStop(1, "#2a1c1c");
+    wood.addColorStop(0, night ? "#2e2020" : "#5a3f3a"); wood.addColorStop(0.15, night ? "#1f1615" : "#3f2c2a"); wood.addColorStop(1, night ? "#140d0d" : "#2a1c1c");
     ctx.fillStyle = wood; ctx.fillRect(0, tableY, W, H - tableY);
     ctx.fillStyle = "rgba(255,220,200,0.18)"; ctx.fillRect(0, tableY, W, 0.8);
     // tank shadow on the table
@@ -364,21 +373,21 @@ export class FishEngine {
     ctx.beginPath(); ctx.ellipse(G.cx, tableY + 2.5, G.halfW(G.sandY) * 0.95, 3, 0, 0, Math.PI * 2); ctx.fill();
 
     // ---- inside the glass ----
-    const airColor = "#2d2749";
+    const airColor = night ? "#171331" : "#2d2749";
     ctx.save();
     G.clipInterior(ctx);
     // air
     const air = ctx.createLinearGradient(0, G.rimY, 0, G.waterY);
-    air.addColorStop(0, airColor); air.addColorStop(1, "#231e3a");
+    air.addColorStop(0, airColor); air.addColorStop(1, night ? "#100d22" : "#231e3a");
     ctx.fillStyle = air; ctx.fillRect(0, 0, W, G.waterY);
     // water: depth gradient, tinted by dirt
     const wg = ctx.createLinearGradient(0, G.waterY, 0, G.sandY);
-    const c = (depth: number) => `rgb(${Math.round(40 + 40 * dirt + depth * 10)},${Math.round(125 - depth * 30 + 40 * dirt)},${Math.round(205 - depth * 60 - 110 * dirt)})`;
+    const c = (depth: number) => mixc([40 + 40 * dirt + depth * 10, 125 - depth * 30 + 40 * dirt, 205 - depth * 60 - 110 * dirt], [12 + 20 * dirt + depth * 4, 30 - depth * 8 + 25 * dirt, 78 - depth * 26 - 40 * dirt], night ? 1 : 0);
     wg.addColorStop(0, c(0)); wg.addColorStop(1, c(1));
     ctx.fillStyle = wg; ctx.fillRect(0, G.waterY, W, G.sandY - G.waterY);
     // caustic light bands drifting through the water
-    ctx.globalAlpha = 0.09 * (1 - dirt * 0.7);
-    ctx.fillStyle = "#dff6ff";
+    ctx.globalAlpha = (night ? 0.05 : 0.09) * (1 - dirt * 0.7);
+    ctx.fillStyle = night ? "#b9c8ff" : "#dff6ff";
     for (let i = 0; i < 3; i++) {
       const x = G.cx + Math.sin(this.t * 0.35 + i * 2.1) * 30 + (i - 1) * 22;
       ctx.beginPath(); ctx.ellipse(x, G.waterY + 30 + i * 8, 7 + i * 2, 34, 0.35, 0, Math.PI * 2); ctx.fill();
@@ -386,20 +395,22 @@ export class FishEngine {
     ctx.globalAlpha = 1;
     // sand
     const sg = ctx.createLinearGradient(0, G.sandY, 0, G.floorY);
-    sg.addColorStop(0, "#e2c48a"); sg.addColorStop(0.4, "#d2ac6c"); sg.addColorStop(1, "#a87c48");
+    sg.addColorStop(0, night ? "#6a5c48" : "#e2c48a"); sg.addColorStop(0.4, night ? "#5a4c3a" : "#d2ac6c"); sg.addColorStop(1, night ? "#3e3226" : "#a87c48");
     ctx.fillStyle = sg; ctx.fillRect(0, G.sandY, W, G.floorY - G.sandY);
-    ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(0, G.sandY, W, 0.7);
+    ctx.fillStyle = night ? "rgba(200,210,255,0.25)" : "rgba(255,240,200,0.5)"; ctx.fillRect(0, G.sandY, W, 0.7);
+    if (night) ctx.globalAlpha = 0.5;
     for (const g of this.gravel) {
       ctx.fillStyle = g.c; ctx.beginPath(); ctx.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.beginPath(); ctx.ellipse(g.x - g.rx * 0.3, g.y - g.ry * 0.35, g.rx * 0.4, g.ry * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.globalAlpha = 1;
     // water surface: a gentle wave with a bright meniscus
     ctx.beginPath();
     ctx.moveTo(0, G.waterY);
     for (let x = 0; x <= W; x += 2) ctx.lineTo(x, G.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45);
     ctx.lineTo(W, G.waterY - 4); ctx.lineTo(0, G.waterY - 4); ctx.closePath();
     ctx.fillStyle = air; ctx.fill();
-    ctx.strokeStyle = "rgba(220,245,255,0.85)"; ctx.lineWidth = 0.7;
+    ctx.strokeStyle = night ? "rgba(190,205,255,0.55)" : "rgba(220,245,255,0.85)"; ctx.lineWidth = 0.7;
     ctx.beginPath();
     for (let x = 0; x <= W; x += 2) { const y = G.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     ctx.stroke();
@@ -407,14 +418,15 @@ export class FishEngine {
     for (let i = 0; i < 4; i++) { const x = G.cx - 40 + ((i * 23 + this.t * 6) % 80); ctx.beginPath(); ctx.ellipse(x, G.waterY + 1.2, 2.5, 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
 
     // plants (behind)
-    this.plant(45, G.sandY, 22, "#2f8f4f", "#5cc47a", 0);
-    this.plant(114, G.sandY, 24, "#2a7a45", "#4fb56b", 1.3);
-    if (G.shape === "square") { this.plant(24, G.sandY, 18, "#2a7a45", "#5cc47a", 0.7); this.plant(136, G.sandY, 20, "#2f8f4f", "#4fb56b", 1.9); }
+    const pd = night ? "#183a2a" : "#2f8f4f", pl = night ? "#2a5a3c" : "#5cc47a", pd2 = night ? "#143324" : "#2a7a45", pl2 = night ? "#255238" : "#4fb56b";
+    this.plant(45, G.sandY, 22, pd, pl, 0);
+    this.plant(114, G.sandY, 24, pd2, pl2, 1.3);
+    if (G.shape === "square") { this.plant(24, G.sandY, 18, pd2, pl, 0.7); this.plant(136, G.sandY, 20, pd, pl2, 1.9); }
 
     if (this.atlas) {
       const atlas = this.atlas;
       for (const s of this.fishes) if (s.layer === "behind") this.drawFish(atlas, s);
-      drawStructure(ctx, atlas, this.inputs.structure, new Date(), this.inputs.timeFormat, ROOM);
+      drawStructure(ctx, atlas, this.inputs.structure, now, this.inputs.timeFormat, ROOM, night, this.t);
       for (const s of this.fishes) if (s.layer === "front") this.drawFish(atlas, s);
     }
 
@@ -430,7 +442,7 @@ export class FishEngine {
       ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.arc(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.3, 0, Math.PI * 2); ctx.fill();
     }
     // front plant
-    this.plant(104, G.sandY + 3, 12, "#3a9c58", "#7ee39a", 2.1);
+    this.plant(104, G.sandY + 3, 12, night ? "#1c4530" : "#3a9c58", night ? "#2f6a46" : "#7ee39a", 2.1);
 
     // dirt specks (only when quite dirty)
     if (dirt > 0.6) {

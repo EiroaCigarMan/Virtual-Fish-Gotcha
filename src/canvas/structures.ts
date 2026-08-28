@@ -22,6 +22,8 @@ export interface Structure {
   edge: string;
   /** Live details drawn over the sprite before the clock. */
   extras?(ctx: CanvasRenderingContext2D, now: Date, fmt: TimeFormat): void;
+  /** Which baked night frame to show (for landmarks with night frames); `t` = scene seconds. */
+  nightFrame?(now: Date, t: number): number;
 }
 
 const CX = 80;
@@ -32,7 +34,16 @@ const def = (id: StructureId, rest: Omit<Structure, "id" | "bounds">): Structure
 
 export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
   castle: def("castle", { clock: clockBox(92), pip: [42, 66], edge: "#5c5e73" }),
-  reunionTower: def("reunionTower", { clock: clockBox(106), pip: [96, 42], edge: "#6a7290" }),
+  reunionTower: def("reunionTower", {
+    clock: clockBox(106), pip: [96, 42], edge: "#6a7290",
+    // lamp programs rotate by the minute: steady → chase (thirds at 3 Hz) → sweep (band rising at 1.5 Hz)
+    nightFrame(now, t) {
+      const mode = now.getMinutes() % 3;
+      if (mode === 0) return 0;
+      if (mode === 1) return 1 + (Math.floor(t * 3) % 3);
+      return 4 + (Math.floor(t * 1.5) % 3);
+    },
+  }),
   eiffelTower: def("eiffelTower", {
     passages: [{ x: 64, y: 108, w: 32, h: 14 }],
     clock: clockBox(88), pip: [80, 32], edge: "#9a6f42",
@@ -61,11 +72,20 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
   dallasCityHall: def("dallasCityHall", { clock: clockBox(90, 58), pip: [80, 44], edge: "#8b8579" }),
 };
 
-/** Draw a structure (sprite + live details + clock) onto a context already in logical units. */
-export function drawStructure(ctx: CanvasRenderingContext2D, atlas: Atlas, id: StructureId, now: Date, fmt: TimeFormat, bg = "#1c1730"): void {
+/**
+ * Draw a structure (sprite + live details + clock) onto a context already in logical units.
+ * At night a landmark with baked night frames shows one (chosen by its `nightFrame`); any other
+ * landmark is drawn from the night-tinted sheet when the atlas carries one.
+ */
+export function drawStructure(ctx: CanvasRenderingContext2D, atlas: Atlas, id: StructureId, now: Date, fmt: TimeFormat, bg = "#1c1730", night = false, t = 0): void {
   const s = STRUCTURE[id];
   const st = STRUCTURE_REGISTRY[id];
-  ctx.drawImage(atlas.structures, 0, s.sy * PX, s.w * PX, s.h * PX, s.x, s.y, s.w, s.h);
+  if (night && s.night?.length) {
+    const k = Math.min(s.night.length - 1, Math.max(0, st.nightFrame?.(now, t) ?? 0));
+    ctx.drawImage(atlas.structures, 0, s.night[k] * PX, s.w * PX, s.h * PX, s.x, s.y, s.w, s.h);
+  } else {
+    ctx.drawImage(night && atlas.structuresNight ? atlas.structuresNight : atlas.structures, 0, s.sy * PX, s.w * PX, s.h * PX, s.x, s.y, s.w, s.h);
+  }
   st.extras?.(ctx, now, fmt);
   const meridiem = drawClockPanel(ctx, st.clock, now, fmt, st.edge);
   drawMeridiemPip(ctx, st.pip[0], st.pip[1], meridiem, bg);
