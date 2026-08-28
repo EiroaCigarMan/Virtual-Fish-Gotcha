@@ -61,9 +61,14 @@ export function setFishName(state: GameState, name: string): GameState {
   return clean ? { ...state, fishName: clean } : state;
 }
 
-/** Pure: swap the structure. Cosmetic — nothing else changes. */
+/**
+ * Pure: swap the structure. Cosmetic — except that the wide skyline nudges a round bowl to the
+ * square tank the first time it's picked (the tank can be switched straight back).
+ */
 export function setStructure(state: GameState, structure: StructureId): GameState {
-  return state.structure === structure ? state : { ...state, structure };
+  if (state.structure === structure) return state;
+  const tank = structure === "dallasSkyline" && state.tank === "bowl" ? "square" : state.tank;
+  return { ...state, structure, tank };
 }
 
 /** Pure: swap the tank shape. Cosmetic — nothing else changes. */

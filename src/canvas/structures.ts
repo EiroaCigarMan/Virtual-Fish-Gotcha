@@ -70,6 +70,12 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
   }),
   pineapple: def("pineapple", { clock: clockBox(94), pip: [80, 48], edge: "#8a5a2a" }),
   dallasCityHall: def("dallasCityHall", { clock: clockBox(90, 58), pip: [80, 44], edge: "#8b8579" }),
+  dallasSkyline: def("dallasSkyline", {
+    // open water between the small Reunion Tower and the podium, and between Renaissance Tower and the Omni
+    passages: [{ x: 43, y: 96, w: 18, h: 26 }, { x: 100, y: 96, w: 16, h: 26 }],
+    clock: clockBox(106), pip: [110, 40], edge: "#9a9dab",
+    nightFrame: (_now, t) => Math.floor(t * 0.7) % 2, // windows twinkle between two lit patterns
+  }),
 };
 
 /**

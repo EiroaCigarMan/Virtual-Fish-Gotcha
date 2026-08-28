@@ -5,7 +5,7 @@ export type TimeFormat = "12h" | "24h";
 export type FishMood = "content" | "hungry" | "bored" | "dirty" | "sad" | "sleepy";
 
 /** The structure the fish swims around. Every one carries the clock in its lower portion. */
-export type StructureId = "castle" | "reunionTower" | "eiffelTower" | "bigBen" | "parthenon" | "stonehenge" | "pineapple" | "dallasCityHall";
+export type StructureId = "castle" | "reunionTower" | "eiffelTower" | "bigBen" | "parthenon" | "stonehenge" | "pineapple" | "dallasCityHall" | "dallasSkyline";
 
 /** The tank the scene is drawn in: the round bowl or a square-cornered aquarium. Cosmetic. */
 export type TankShape = "bowl" | "square";

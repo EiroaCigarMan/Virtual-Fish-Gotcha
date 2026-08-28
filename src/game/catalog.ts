@@ -11,7 +11,8 @@ export const STRUCTURES: CatalogEntry<StructureId>[] = [
   { id: "parthenon", label: "Parthenon", emoji: "🏛️", blurb: "Marble columns on the Acropolis" },
   { id: "stonehenge", label: "Stonehenge", emoji: "🪨", blurb: "Standing stones on Salisbury Plain" },
   { id: "pineapple", label: "Pineapple", emoji: "🍍", blurb: "Who lives in one under the sea?" },
-  { id: "dallasCityHall", label: "Dallas City Hall", emoji: "🏢", blurb: "Pei's inverted pyramid — with a sign in the plaza" },
+  { id: "dallasCityHall", label: "Dallas City Hall", emoji: "🏢", blurb: "Pei's inverted pyramid" },
+  { id: "dallasSkyline", label: "Dallas Skyline", emoji: "🌆", blurb: "Reunion to the Omni — swim between the towers; lights up at night" },
 ];
 
 export const SPECIES: CatalogEntry<SpeciesId>[] = [

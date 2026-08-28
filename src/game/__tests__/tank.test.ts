@@ -9,7 +9,7 @@ describe("catalog", () => {
   test("every structure and species has a renderer and flavor", () => {
     for (const s of STRUCTURES) expect(STRUCTURE_REGISTRY[s.id]).toBeDefined();
     for (const s of SPECIES) { expect(FISH[s.id]).toBeDefined(); expect(SPECIES_FLAVOR[s.id]).toBeDefined(); }
-    expect(STRUCTURES).toHaveLength(8);
+    expect(STRUCTURES).toHaveLength(9);
     expect(SPECIES).toHaveLength(7);
   });
   test("structures fit inside the bowl and stand on the sand", () => {
@@ -46,6 +46,11 @@ describe("tank state", () => {
     expect(setStructure(t, "bigBen")).toBe(t);
     expect(setTank(t, "square").tank).toBe("square");
     expect(setTank(t, "bowl")).toBe(t);
+    // the skyline nudges a round bowl to the square tank once; a square tank stays; switching back is allowed
+    expect(setStructure(t, "dallasSkyline").tank).toBe("square");
+    expect(setStructure({ ...t, tank: "square" }, "dallasSkyline").tank).toBe("square");
+    expect(setTank(setStructure(t, "dallasSkyline"), "bowl").tank).toBe("bowl");
+    expect(setStructure(setStructure(t, "dallasSkyline"), "castle").tank).toBe("square");
   });
   test("new species = new fish, but the tank setup carries over", () => {
     const s = { ...defaultState(0), hunger: 10, fishName: "Bob", structure: "parthenon" as const, tank: "square" as const, timeFormat: "24h" as const };
@@ -84,7 +89,7 @@ describe("storage", () => {
 
 describe("passages", () => {
   test("open structures declare passages inside their bounds, big enough for a goldfish", () => {
-    for (const id of ["eiffelTower", "stonehenge"] as const) {
+    for (const id of ["eiffelTower", "stonehenge", "dallasSkyline"] as const) {
       const { bounds: b, passages } = STRUCTURE_REGISTRY[id];
       expect(passages?.length).toBeGreaterThan(0);
       for (const p of passages!) {
