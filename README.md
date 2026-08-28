@@ -10,6 +10,7 @@ A cozy virtual fish that lives in your browser, drawn the way a 2001 console wou
 - **Eight structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid), and a certain pineapple. Swap any time from the **Tank** tab — it's cosmetic.
 - **Seven fish**: Goldfish (default), Betta, Endler's Livebearer, Chili Rasbora, Scarlet Badis, Pea Puffer, White Cloud Mountain Minnow. Each has its own sprite, swim speed, and the two tiny ones swim as a school. Picking a new species starts a new fish (it asks first); the structure and clock format carry over.
 - **Round or square tank** — a toggle in the **Tank** tab swaps the glass bowl for a square-cornered aquarium; every landmark fits both, and the choice is persisted.
+- **Night falls in Dallas.** Sunrise and sunset are computed locally for Dallas (NOAA solar equations in `game/solar.ts`, no network) and between them the room and water darken and the landmarks dim — except Reunion Tower, whose ball lights up and runs lamp programs that rotate by the minute (steady → chase → sweep). The clock stays lit.
 - The **LED clock** shows the current time in **12h or 24h** (toggle in Settings, persisted) with the date (`mm/dd/yy`) in a smaller row beneath.
 - Everything is stored in `localStorage`. Fully static: `dist/` deploys anywhere.
 
@@ -48,7 +49,7 @@ bun run preview    # serve dist/ locally
 | `build` | Type-check + production bundle to `dist/` |
 | `preview` | Serve the production bundle |
 | `test` | Unit tests for decay / actions / mood / clock (`bun test`) |
-| `snapshot` | Render one frame of the tank to a PNG without a browser: `bun run snapshot out.png [mood] [cleanliness] [12h\|24h] [seconds] [structure] [species] [bowl\|square]` — e.g. `bun run snapshot big-ben.png content 100 12h 4 bigBen whiteCloud` |
+| `snapshot` | Render one frame of the tank to a PNG without a browser: `bun run snapshot out.png [mood] [cleanliness] [12h\|24h] [seconds] [structure] [species] [bowl\|square] [ISO time]` (the time pins the clock and day/night) — e.g. `bun run snapshot big-ben.png content 100 12h 4 bigBen whiteCloud` |
 | `sprites` | Bake every fish and structure model in `scripts/sprites/models/` into `public/sprites/*.png` + `src/canvas/generated/manifest.ts`. `--file path.ts --out dir` bakes one model for iterating; `bun scripts/sprites/preview.ts in.png out.png 6` zooms a sheet for a look. |
 | `sprites:check` | Re-bake into a temp dir and fail if the committed sheets differ by a byte (runs in CI, so the sheets always match their models). |
 
@@ -95,8 +96,9 @@ scripts/
 1. Add the id to `StructureId` / `SpeciesId` in `src/game/types.ts` and an entry in `src/game/catalog.ts` (label, emoji, blurb; species also get `speed` + `school`).
 2. Model it in `scripts/sprites/models/structures/<id>.ts` (a `StructureModel`: model space is logical scene pixels, y up, ground at 0, x = 0 at the scene's centre; `frame` + `at` place the sprite) or `scripts/sprites/models/fish/<id>.ts` (a `FishModel`: faces +x, 4 swim frames via `swimWag`, `eye`/`mouth` anchors for the mood overlays). Build it from `mesh.ts` primitives; give parts a `tex` for pattern. Preview with `bun scripts/sprites/build.ts --file <model.ts> --out /tmp/x` and `bun scripts/sprites/preview.ts`.
 3. Register it in `scripts/sprites/models/index.ts` and run `bun run sprites` (the manifest is typed against the game's ids, so a missing model fails the type-check).
-4. Structure only: add its entry to `STRUCTURE_REGISTRY` in `src/canvas/structures.ts` — the clock box (model a matching dark recess), the AM/PM pip position, the panel's edge colour, and any `passages` (openings at least 16×10 px the fish may swim through) or live `extras`. Keep painted pixels within x 38..122 at the sand line so it fits the round bowl too (a test checks both tanks).
-5. `bun test` checks passages really are open, clocks sit inside their sprites and are fully backed, and every structure fits both tanks. `bun run snapshot` shows the result without a browser.
+4. Structure only: to light up at night, give the model `nightFrames` and honour `build({ night, frame })`; the runtime picks a frame via the registry's `nightFrame(now, t)`. Without night frames the runtime just dims the day sprite.
+5. Structure only: add its entry to `STRUCTURE_REGISTRY` in `src/canvas/structures.ts` — the clock box (model a matching dark recess), the AM/PM pip position, the panel's edge colour, and any `passages` (openings at least 16×10 px the fish may swim through) or live `extras`. Keep painted pixels within x 38..122 at the sand line so it fits the round bowl too (a test checks both tanks).
+6. `bun test` checks passages really are open, clocks sit inside their sprites and are fully backed, and every structure fits both tanks. `bun run snapshot` shows the result without a browser.
 
 ## Verify offline decay yourself
 
