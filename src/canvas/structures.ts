@@ -89,9 +89,20 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
     extras(ctx, now, fmt, live) {
       const omni: OmniLive = { now, fmt, t: live.t, night: live.night, message: live.omniMessage, weather: live.weather };
       drawOmniDisplay(ctx, { x: 38, y: 71, w: 84, h: 32 }, omni);
-      // the crown sign
-      const w = textWidth("OMNI HOTEL", 0.6, 0.6);
-      drawText(ctx, "OMNI HOTEL", 80 - w / 2, 64.4, 0.6, live.night ? "#fff6dc" : "#d9dde8", 0.6);
+      // the crown sign: plain by day, neon after dark (a soft halo, a coloured bloom, then the crisp letters)
+      const sign = "OMNI HOTEL", sc = 0.6, gap = 0.6;
+      const w = textWidth(sign, sc, gap), sx = 80 - w / 2, sy = 64.4;
+      if (live.night) {
+        const halo = ctx.createRadialGradient(80, sy + 1.5, 1, 80, sy + 1.5, 20);
+        halo.addColorStop(0, "rgba(94,233,255,0.28)"); halo.addColorStop(1, "rgba(94,233,255,0)");
+        ctx.fillStyle = halo; ctx.fillRect(56, sy - 8, 48, 19);
+        ctx.globalAlpha = 0.22;
+        for (const [dx, dy] of [[-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5], [-0.35, -0.35], [0.35, 0.35], [-0.35, 0.35], [0.35, -0.35]]) drawText(ctx, sign, sx + dx, sy + dy, sc, "#5ee9ff", gap);
+        ctx.globalAlpha = 1;
+        drawText(ctx, sign, sx, sy, sc, "#eafdff", gap);
+      } else {
+        drawText(ctx, sign, sx, sy, sc, "#d9dde8", gap);
+      }
     },
   }),
 };
