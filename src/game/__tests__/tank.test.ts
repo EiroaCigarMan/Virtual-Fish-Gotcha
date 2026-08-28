@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SPECIES, SPECIES_FLAVOR, STRUCTURES, isSpeciesId, isStructureId } from "../catalog";
-import { defaultState, newFish, setStructure } from "../state";
+import { defaultState, newFish, setStructure, setTank } from "../state";
 import { coerceState } from "../storage";
 import { FISH } from "../../canvas/atlas";
 import { STRUCTURE_REGISTRY } from "../../canvas/structures";
@@ -44,15 +44,18 @@ describe("tank state", () => {
     expect(t.hunger).toBe(42);
     expect(t.fishName).toBe("Bob");
     expect(setStructure(t, "bigBen")).toBe(t);
+    expect(setTank(t, "square").tank).toBe("square");
+    expect(setTank(t, "bowl")).toBe(t);
   });
   test("new species = new fish, but the tank setup carries over", () => {
-    const s = { ...defaultState(0), hunger: 10, fishName: "Bob", structure: "parthenon" as const, timeFormat: "24h" as const };
+    const s = { ...defaultState(0), hunger: 10, fishName: "Bob", structure: "parthenon" as const, tank: "square" as const, timeFormat: "24h" as const };
     const t = newFish(s, "betta", 5000);
     expect(t.species).toBe("betta");
     expect(t.fishName).toBe("");
     expect(t.hunger).toBe(defaultState(0).hunger);
     expect(t.createdAt).toBe(5000);
     expect(t.structure).toBe("parthenon");
+    expect(t.tank).toBe("square");
     expect(t.timeFormat).toBe("24h");
     expect(newFish(t, "betta")).toBe(t);
   });
@@ -62,15 +65,18 @@ describe("storage", () => {
   test("v1 saves migrate to goldfish + castle, v2 keeps choices, junk falls back", () => {
     const v1 = { schemaVersion: 1, hunger: 50, happiness: 50, cleanliness: 50, lastSeenAt: 1, lastActionAt: {}, timeFormat: "24h", fishName: "Old", createdAt: 1 };
     const m = coerceState(v1, 2)!;
-    expect(m.schemaVersion).toBe(2);
+    expect(m.schemaVersion).toBe(3);
+    expect(m.tank).toBe("bowl");
     expect(m.species).toBe("goldfish");
     expect(m.structure).toBe("castle");
     expect(m.fishName).toBe("Old");
     const v2 = { ...v1, schemaVersion: 2, species: "peaPuffer", structure: "stonehenge" };
-    expect(coerceState(v2, 2)).toMatchObject({ species: "peaPuffer", structure: "stonehenge" });
+    expect(coerceState(v2, 2)).toMatchObject({ species: "peaPuffer", structure: "stonehenge", tank: "bowl" });
+    expect(coerceState({ ...v2, schemaVersion: 3, tank: "square" }, 2)).toMatchObject({ tank: "square" });
+    expect(coerceState({ ...v2, schemaVersion: 3, tank: "hexagon" }, 2)).toMatchObject({ tank: "bowl" });
     const bad = { ...v2, species: "shark", structure: "moon" };
     expect(coerceState(bad, 2)).toMatchObject({ species: "goldfish", structure: "castle" });
-    expect(coerceState({ schemaVersion: 3 }, 2)).toBeNull();
+    expect(coerceState({ schemaVersion: 4 }, 2)).toBeNull();
     expect(isSpeciesId("shark")).toBe(false);
     expect(isStructureId("castle")).toBe(true);
   });

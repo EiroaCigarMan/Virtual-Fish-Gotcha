@@ -6,19 +6,15 @@ import type { StructureModel } from "../../types";
  * Dallas City Hall (I. M. Pei), seen head-on from the plaza: a buff-concrete inverted pyramid,
  * half-width 20 + y/4 from the ground to the roof at y 72, with six recessed glass bands, a
  * lobby of recessed glass behind three fat columns, a rooftop mast, and the clock recess in the
- * fourth band (scene 58..94 × 90..106). A blank picket sign stands in the plaza to the right
- * (scene 97..124 × 88..115) — the runtime letters it. Model space: ground y = 0, x = 0 at scene 80.
+ * fourth band (scene 58..94 × 90..106).
+ * Model space: ground y = 0, x = 0 at scene 80.
  */
 const CONC = hex("#b9b3a6"), CONC_L = hex("#dcd6c8"), CONC_D = hex("#8b8579"), SOFFIT = hex("#6d6862");
 const GLASS = hex("#2b3a4e"), GLASS_L = hex("#40587a"), MULL = hex("#9a9488");
-const POST = hex("#8a5a2a"), POST_D = hex("#5e3c1a"), BOARD = hex("#f2e8d5"), BOARD_D = hex("#c0b295");
 const RECESS = hex("#0e1422");
 const VIEW: View = { yaw: -7, pitch: 7 };
 /** Clock box in sprite space: scene 58..94 × 90..106. */
 const CLOCK: SBox = { x0: -22, x1: 14, y0: 18, y1: 34 };
-/** Sign board and post in sprite space (scene 97..124 × 88..115; post 109..112 × 115..124). */
-const SIGN: SBox = { x0: 17, x1: 44, y0: 9, y1: 36 };
-const POST_BOX: SBox = { x0: 29, x1: 32, y0: 0, y1: 9 };
 
 // ---- local helpers: sprite-space recesses and panels -------------------------------------
 interface SBox { x0: number; x1: number; y0: number; y1: number }
@@ -82,7 +78,7 @@ const lobby: TexFn = (x, y) => {
 const column: TexFn = (x, y, z) => (y > 15.4 ? CONC_D : conc(x, y, z));
 
 export const dallasCityHall: StructureModel = {
-  frame: { x: -42, y: 0, w: 88, h: 78 },
+  frame: { x: -42, y: 0, w: 84, h: 78 },
   at: { x: 38, y: 46 },
   view: VIEW,
   build(): Part[] {
@@ -94,17 +90,12 @@ export const dallasCityHall: StructureModel = {
     const mast = put(cylinder(0.6, 6, 8, CONC_D), { t: [0, 75, -2] });
     // clock recess in the fourth band: hole cut in sprite space, dark panel behind the facade
     const panel = facing(CLOCK, 13.8, VIEW, RECESS);
-    // the picket sign, squarely facing the camera so its projection is exactly the runtime's text box (z ≈ 20, clear of the facade)
-    const board = facing(SIGN, 27, VIEW, BOARD, 1.0);
-    const post = facing(POST_BOX, 26.5, VIEW, POST, 1.5);
     return [
       part(body, { tex: withRecess(facade, CLOCK, VIEW, CONC_L, CONC_D), ks: 0.12, shininess: 8 }),
       part(glass, { tex: lobby, ks: 0.5, shininess: 30 }),
       part(cols, { tex: column, ks: 0.12, shininess: 8 }),
       part(mast, { ks: 0.3 }),
       part(panel, { ks: 0 }),
-      part(board, { tex: (x, y) => (Math.abs(x) > 12.5 || Math.abs(y) > 12.5 ? BOARD_D : BOARD), ks: 0.08, shininess: 6 }),
-      part(post, { tex: (x) => (x > 0.5 ? POST_D : POST), ks: 0.1, shininess: 6 }),
     ];
   },
 };

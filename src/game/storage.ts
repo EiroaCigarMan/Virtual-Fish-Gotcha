@@ -1,21 +1,21 @@
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "./constants";
 import { applyDecay, clamp, defaultState } from "./state";
-import { DEFAULT_SPECIES, DEFAULT_STRUCTURE, isSpeciesId, isStructureId } from "./catalog";
+import { DEFAULT_SPECIES, DEFAULT_STRUCTURE, DEFAULT_TANK, isSpeciesId, isStructureId, isTankShape } from "./catalog";
 import type { GameState } from "./types";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/** Validate + repair a parsed blob; unknown/corrupt → null. v1 blobs migrate (goldfish + castle). */
+/** Validate + repair a parsed blob; unknown/corrupt → null. v1 blobs migrate (goldfish + castle); v2 gains the tank (bowl). */
 function coerce(raw: unknown, now: number): GameState | null {
-  if (!isRecord(raw) || (raw.schemaVersion !== 1 && raw.schemaVersion !== 2)) return null;
+  if (!isRecord(raw) || (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3)) return null;
   const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
   const d = defaultState(now);
   const la = isRecord(raw.lastActionAt) ? raw.lastActionAt : {};
   const ts = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     hunger: clamp(num(raw.hunger, d.hunger)),
     happiness: clamp(num(raw.happiness, d.happiness)),
     cleanliness: clamp(num(raw.cleanliness, d.cleanliness)),
@@ -26,6 +26,7 @@ function coerce(raw: unknown, now: number): GameState | null {
     createdAt: num(raw.createdAt, now),
     structure: isStructureId(raw.structure) ? raw.structure : DEFAULT_STRUCTURE,
     species: isSpeciesId(raw.species) ? raw.species : DEFAULT_SPECIES,
+    tank: isTankShape(raw.tank) ? raw.tank : DEFAULT_TANK,
   };
 }
 

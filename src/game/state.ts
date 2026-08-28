@@ -1,12 +1,12 @@
 import { ACTION_COOLDOWN_MS, ACTION_EFFECTS, DECAY_PER_HOUR } from "./constants";
-import { DEFAULT_SPECIES, DEFAULT_STRUCTURE } from "./catalog";
-import type { ActionName, GameState, SpeciesId, StatName, StructureId, TimeFormat } from "./types";
+import { DEFAULT_SPECIES, DEFAULT_STRUCTURE, DEFAULT_TANK } from "./catalog";
+import type { ActionName, GameState, SpeciesId, StatName, StructureId, TankShape, TimeFormat } from "./types";
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
 
 export function defaultState(now = Date.now()): GameState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     hunger: 80,
     happiness: 75,
     cleanliness: 85,
@@ -17,6 +17,7 @@ export function defaultState(now = Date.now()): GameState {
     createdAt: now,
     structure: DEFAULT_STRUCTURE,
     species: DEFAULT_SPECIES,
+    tank: DEFAULT_TANK,
   };
 }
 
@@ -65,11 +66,16 @@ export function setStructure(state: GameState, structure: StructureId): GameStat
   return state.structure === structure ? state : { ...state, structure };
 }
 
+/** Pure: swap the tank shape. Cosmetic — nothing else changes. */
+export function setTank(state: GameState, tank: TankShape): GameState {
+  return state.tank === tank ? state : { ...state, tank };
+}
+
 /**
  * Pure: a new fish of `species`. Stats, name and age reset (the name dialog reopens);
- * structure and clock format carry over. Same species → same object (no-op).
+ * structure, tank and clock format carry over. Same species → same object (no-op).
  */
 export function newFish(state: GameState, species: SpeciesId, now = Date.now()): GameState {
   if (state.species === species) return state;
-  return { ...defaultState(now), structure: state.structure, timeFormat: state.timeFormat, species };
+  return { ...defaultState(now), structure: state.structure, tank: state.tank, timeFormat: state.timeFormat, species };
 }
