@@ -1,4 +1,4 @@
-import { box, cylinder, extrude, hash, hex, merge, mixRGB, part, smoothstep, transform, type ColorFn, type Mesh, type Part, type RGB, type TexFn, type Xform } from "../../mesh";
+import { box, cylinder, extrude, hash, hex, merge, mixRGB, part, scaleRGB, smoothstep, transform, type ColorFn, type Mesh, type Part, type RGB, type TexFn, type Xform } from "../../mesh";
 import type { View } from "../../raster";
 import type { StructureModel } from "../../types";
 
@@ -6,9 +6,14 @@ import type { StructureModel } from "../../types";
  * The Parthenon: three marble steps, eight fluted Doric columns in front of a dark cella, a deep
  * entablature with a triglyph/metope frieze either side of the clock recess (scene 62..98 × 86..102),
  * and a pediment with a shadowed tympanum. Model space: ground y = 0 (scene 124), x = 0 at scene 80.
+ *
+ * Night (1 frame): floodlit from the ground like the Acropolis — warm gold strongest on the
+ * stylobate and column bases, fading up the shafts to the entablature; the cella stays in
+ * shadow; the pediment catches a little light along its lower edge.
  */
 const MARBLE = hex("#e8e2d0"), MARBLE_D = hex("#b8b09a"), MARBLE_DD = hex("#8a8270"), SHADE = hex("#5c5648"), FRIEZE = hex("#c9bfa6");
 const RECESS = hex("#0e1422");
+const FLOOD = hex("#ffd890");
 const VIEW: View = { yaw: -7, pitch: 7 };
 /** Clock box in sprite space (== model space at z = 0): scene 62..98 × 86..102. */
 const CLOCK: SBox = { x0: -18, x1: 18, y0: 22, y1: 38 };
@@ -83,11 +88,28 @@ const pediment: TexFn = (x, y, z) => {
   return marble(x, y, z);
 };
 
+// ---- night --------------------------------------------------------------------------------
+/** Ground floodlight on marble: full strength at the stylobate, gone by the architrave (y ≈ 26). */
+const floodK = (y: number) => 1 - smoothstep(4, 26, y);
+function floodlit(c: RGB, y: number): RGB {
+  const t = floodK(y);
+  return scaleRGB(mixRGB(c, FLOOD, 0.2 + 0.45 * t), 0.6 + 0.4 * t);
+}
+const lit = (base: TexFn): TexFn => (x, y, z) => floodlit(base(x, y, z), y);
+/** The pediment at night: mostly dark, its underside edge (y 38..41.5) catching light from below. */
+const pedimentNight: TexFn = (x, y, z) => {
+  const c = pediment(x, y, z);
+  const t = 1 - smoothstep(38.4, 41.5, y);
+  return scaleRGB(mixRGB(c, FLOOD, 0.1 + 0.3 * t), 0.7 + 0.35 * t);
+};
+
 export const parthenon: StructureModel = {
   frame: { x: -42, y: 0, w: 84, h: 52 },
   at: { x: 38, y: 72 },
   view: VIEW,
-  build(): Part[] {
+  nightFrames: 1,
+  build(opts): Part[] {
+    const night = !!opts?.night;
     // stylobate: three steps, each narrower and shallower than the one below
     const steps = merge(
       put(box(80, 4, 22, MARBLE, [4, 1, 2]), { t: [0, 2, 0] }),
@@ -110,14 +132,27 @@ export const parthenon: StructureModel = {
     // clock recess: hole cut in sprite space, dark panel behind the facade
     const panel = facing(CLOCK, 8.4, VIEW, RECESS);
     const rec = (t: TexFn) => withRecess(t, CLOCK, VIEW, MARBLE, MARBLE_DD);
+    if (!night) {
+      return [
+        part(steps, { tex: marble, ks: 0.22, shininess: 16 }),
+        part(cella, { ks: 0.05, shininess: 6 }),
+        part(merge(...shafts), { tex: fluted, ks: 0.25, shininess: 18 }),
+        part(merge(...caps), { tex: marble, ks: 0.22, shininess: 16 }),
+        part(entab, { tex: rec(entablature), ks: 0.22, shininess: 16 }),
+        part(cornice, { tex: rec(marble), ks: 0.22, shininess: 16 }),
+        part(ped, { tex: rec(pediment), ks: 0.22, shininess: 16 }),
+        part(panel, { ks: 0 }),
+      ];
+    }
+    // ---- night: floodlit from the ground, the cella in shadow, the recess untouched ----
     return [
-      part(steps, { tex: marble, ks: 0.22, shininess: 16 }),
-      part(cella, { ks: 0.05, shininess: 6 }),
-      part(merge(...shafts), { tex: fluted, ks: 0.25, shininess: 18 }),
-      part(merge(...caps), { tex: marble, ks: 0.22, shininess: 16 }),
-      part(entab, { tex: rec(entablature), ks: 0.22, shininess: 16 }),
-      part(cornice, { tex: rec(marble), ks: 0.22, shininess: 16 }),
-      part(ped, { tex: rec(pediment), ks: 0.22, shininess: 16 }),
+      part(steps, { tex: lit(marble), ks: 0.22, shininess: 16, emissive: 1.15 }),
+      part(cella, { ks: 0.05, shininess: 6, emissive: 0.8 }),
+      part(merge(...shafts), { tex: lit(fluted), ks: 0.25, shininess: 18, emissive: 1.25 }),
+      part(merge(...caps), { tex: lit(marble), ks: 0.22, shininess: 16, emissive: 1.1 }),
+      part(entab, { tex: rec(lit(entablature)), ks: 0.22, shininess: 16, emissive: 1.0 }),
+      part(cornice, { tex: rec(lit(marble)), ks: 0.22, shininess: 16, emissive: 0.9 }),
+      part(ped, { tex: rec(pedimentNight), ks: 0.22, shininess: 16, emissive: 0.9 }),
       part(panel, { ks: 0 }),
     ];
   },

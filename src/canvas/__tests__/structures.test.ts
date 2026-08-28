@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { createCanvas } from "@napi-rs/canvas";
 import { STRUCTURE_REGISTRY, drawStructure } from "../structures";
+import { STRUCTURE } from "../atlas";
 import { type Atlas, loadAtlas, makeNightSheet, PX, STRUCTURE_SHEET_SIZE } from "../atlas";
 import { STRUCTURES } from "../../game/catalog";
 import { TANK_GEOMS } from "../tank";
@@ -64,21 +65,36 @@ describe("structure rendering", () => {
     }
   });
 
-  test("night: Reunion Tower's ball is brighter at night, and the clock digits are pixel-identical day vs night", () => {
+  test("night: Reunion Tower's ball is brighter at night", () => {
     const ball = { x: 66, y: 40, w: 28, h: 28 };
     const bright = (px: Uint8ClampedArray) => { let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 40 && px[i] + px[i + 1] + px[i + 2] > 600) n++; return n; };
     expect(bright(pixels("reunionTower", ball, "12h", true))).toBeGreaterThan(bright(pixels("reunionTower", ball, "12h", false)) * 1.3);
-    for (const id of ["reunionTower", "castle"] as const) {
-      const c = STRUCTURE_REGISTRY[id].clock;
-      const inner = { x: c.x + 2, y: c.y + 1, w: c.w - 4, h: c.h - 2 };
-      expect(Buffer.from(pixels(id, inner, "12h", true)).equals(Buffer.from(pixels(id, inner, "12h", false)))).toBe(true);
-    }
   });
 
-  test("night: a landmark without night frames is drawn darker from the tinted sheet", () => {
-    const b = STRUCTURE_REGISTRY.castle.bounds;
-    const lum = (px: Uint8ClampedArray) => { let s = 0, n = 0; for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 40) { s += px[i] + px[i + 1] + px[i + 2]; n++; } return s / n; };
-    expect(lum(pixels("castle", b, "12h", true))).toBeLessThan(lum(pixels("castle", b, "12h", false)) * 0.85);
+  test("night: every structure with baked night frames renders a different frame at night, with the clock digits pixel-identical", () => {
+    let withNight = 0;
+    for (const s of STRUCTURES) {
+      const st = STRUCTURE_REGISTRY[s.id];
+      const b = st.bounds, c = st.clock;
+      const day = Buffer.from(pixels(s.id, b, "12h", false)), night = Buffer.from(pixels(s.id, b, "12h", true));
+      expect(day.equals(night)).toBe(false);
+      const inner = { x: c.x + 2, y: c.y + 1, w: c.w - 4, h: c.h - 2 };
+      expect(Buffer.from(pixels(s.id, inner, "12h", true)).equals(Buffer.from(pixels(s.id, inner, "12h", false)))).toBe(true);
+      if (STRUCTURE[s.id].night?.length) withNight++;
+    }
+    expect(withNight).toBe(STRUCTURES.length); // every landmark has its own night look
+  });
+
+  test("night: the tinted sheet (fallback for landmarks without night frames) is darker than the day sheet", () => {
+    const c = createCanvas(160 * PX, 144 * PX);
+    const ctx = c.getContext("2d") as unknown as CanvasRenderingContext2D;
+    const lum = (img: CanvasImageSource) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0);
+      const px = (ctx as unknown as { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } }).getImageData(0, 0, c.width, c.height).data;
+      let s = 0, n = 0; for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 40) { s += px[i] + px[i + 1] + px[i + 2]; n++; } return s / n;
+    };
+    expect(lum(atlas.structuresNight!)).toBeLessThan(lum(atlas.structures) * 0.85);
   });
 
   test("every clock recess is fully painted before the panel goes on (no see-through behind the clock)", () => {

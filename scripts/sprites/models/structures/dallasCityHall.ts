@@ -1,4 +1,4 @@
-import { box, cylinder, extrude, hash, hex, merge, mixRGB, part, transform, type ColorFn, type Mesh, type Part, type RGB, type TexFn, type Xform } from "../../mesh";
+import { box, cylinder, ellipsoid, extrude, hash, hex, merge, mixRGB, part, smoothstep, transform, type ColorFn, type Mesh, type Part, type RGB, type TexFn, type Xform } from "../../mesh";
 import type { View } from "../../raster";
 import type { StructureModel } from "../../types";
 
@@ -12,6 +12,9 @@ import type { StructureModel } from "../../types";
 const CONC = hex("#b9b3a6"), CONC_L = hex("#dcd6c8"), CONC_D = hex("#8b8579"), SOFFIT = hex("#6d6862");
 const GLASS = hex("#2b3a4e"), GLASS_L = hex("#40587a"), MULL = hex("#9a9488");
 const RECESS = hex("#0e1422");
+/** Night: warm lit offices and dark unlit cells, concrete uplit from the plaza, a red aviation light on the mast. */
+const WIN_LIT = hex("#ffe6b0"), WIN_OFF = hex("#101826"), LOBBY_N = hex("#ffd080"), CONC_N = hex("#262a36"), CONC_NL = hex("#4a4e5c"), UPLIGHT = hex("#d9cdb4");
+const SOFFIT_N = hex("#171a22"), MULL_N = hex("#3a3a40"), MAST_N = hex("#3a3a40"), AVI_RED = hex("#ff2a2a");
 const VIEW: View = { yaw: -7, pitch: 7 };
 /** Clock box in sprite space: scene 58..94 × 90..106. */
 const CLOCK: SBox = { x0: -22, x1: 14, y0: 18, y1: 34 };
@@ -77,11 +80,45 @@ const lobby: TexFn = (x, y) => {
 };
 const column: TexFn = (x, y, z) => (y > 15.4 ? CONC_D : conc(x, y, z));
 
+// ---- night materials ----------------------------------------------------------------------
+/** Concrete after dark: the day grain remapped onto a dark blue-grey, uplit from the plaza (bright at the foot, gone by the roof). */
+const concNight: TexFn = (x, y, z) => {
+  const d = conc(x, y, z);
+  const t = Math.max(0, Math.min(1, (0.3 * d[0] + 0.59 * d[1] + 0.11 * d[2] - 0.5) / 0.4));
+  const up = 1 - smoothstep(0, 62, y);
+  return mixRGB(mixRGB(CONC_N, CONC_NL, t), [UPLIGHT[0] * (0.7 + 0.3 * t), UPLIGHT[1] * (0.7 + 0.3 * t), UPLIGHT[2] * (0.7 + 0.3 * t)], 0.72 * up * up);
+};
+/** Which office cells are lit: ~75% of the 5-unit window cells per band, fixed by hash. */
+const cellLit = (x: number, y: number): boolean => {
+  const band = BANDS.findIndex((top) => y >= top - 4.8 && y < top + 0.8);
+  return hash(Math.floor(x / 5) + 31 * band, 7) < 0.75;
+};
+/** Front face at night: the day layout with every material swapped for its after-dark version. */
+const facadeNight: TexFn = (x, y, z) => {
+  const c = facade(x, y, z);
+  if (c === null) return null;
+  if (c === GLASS) return cellLit(x, y) ? WIN_LIT : WIN_OFF;
+  if (c === GLASS_L) return cellLit(x, y) ? mixRGB(WIN_LIT, WIN_OFF, 0.35) : WIN_OFF;
+  if (c === MULL) return MULL_N;
+  if (c === SOFFIT) return SOFFIT_N;
+  if (c === CONC_L) return mixRGB(concNight(x, y, z), UPLIGHT, y > 71.2 ? 0.1 : 0.2);
+  return concNight(x, y, z);
+};
+const lobbyNight: TexFn = (x, y) => {
+  if (y > 11) return mixRGB(WIN_LIT, LOBBY_N, 0.3);
+  if ((((x % 5) + 5) % 5) < 0.5 || (y > 7.4 && y < 8)) return MULL_N;
+  return mixRGB(LOBBY_N, WIN_LIT, 0.5 * (1 - y / 12));
+};
+const columnNight: TexFn = (x, y, z) => (y > 15.4 ? CONC_N : concNight(x, y, z));
+const mastNight: TexFn = (_x, y) => (y > 77 ? AVI_RED : MAST_N);
+
 export const dallasCityHall: StructureModel = {
   frame: { x: -42, y: 0, w: 84, h: 78 },
   at: { x: 38, y: 46 },
   view: VIEW,
-  build(): Part[] {
+  nightFrames: 1,
+  build(opts): Part[] {
+    const night = !!opts?.night;
     // the inverted pyramid: a trapezoid extruded 30 deep, front face at z = 15
     const body = put(extrude([[-20, 0], [20, 0], [38, 72], [-38, 72]], FRONT_Z * 2, CONC), {});
     // recessed lobby glass (4 deep) and the three columns standing proud of the facade
@@ -90,6 +127,17 @@ export const dallasCityHall: StructureModel = {
     const mast = put(cylinder(0.6, 6, 8, CONC_D), { t: [0, 75, -2] });
     // clock recess in the fourth band: hole cut in sprite space, dark panel behind the facade
     const panel = facing(CLOCK, 13.8, VIEW, RECESS);
+    if (night) {
+      const beacon = put(ellipsoid(0.75, 0.75, 0.75, 8, 6, AVI_RED), { t: [0, 77.2, -2] });
+      return [
+        part(body, { tex: withRecess(facadeNight, CLOCK, VIEW, mixRGB(CONC_L, CONC_N, 0.35), CONC_N), ks: 0.12, shininess: 8, emissive: 1.2 }),
+        part(glass, { tex: lobbyNight, ks: 0.2, shininess: 30, emissive: 1.5 }),
+        part(cols, { tex: columnNight, ks: 0.12, shininess: 8, emissive: 1.1 }),
+        part(mast, { tex: mastNight, ks: 0.1, emissive: 1.2 }),
+        part(panel, { ks: 0 }),
+        part(beacon, { ks: 0, emissive: 3 }),
+      ];
+    }
     return [
       part(body, { tex: withRecess(facade, CLOCK, VIEW, CONC_L, CONC_D), ks: 0.12, shininess: 8 }),
       part(glass, { tex: lobby, ks: 0.5, shininess: 30 }),

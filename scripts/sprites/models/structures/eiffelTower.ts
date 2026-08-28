@@ -1,4 +1,4 @@
-import { box, cylinder, empty, hex, merge, part, transform, type Mesh, type Part, type RGB, type TexFn } from "../../mesh";
+import { box, cylinder, empty, hash, hex, merge, mixRGB, part, transform, type Mesh, type Part, type RGB, type TexFn } from "../../mesh";
 import type { StructureModel } from "../../types";
 
 /**
@@ -8,9 +8,14 @@ import type { StructureModel } from "../../types";
  *
  * Built as two lattice ribbons (front and back planes, tapering in x and z) whose texture cuts
  * out everything between the X-braces, so you see the far truss through the near one.
+ *
+ * Night (2 frames): the lattice bathed in golden sodium light, the decks glowing from
+ * underneath and a white-blue beacon at the apex. Frame 1 adds the sparkle — a deterministic
+ * scatter of bright cells over the lattice — so alternating the two frames twinkles.
  */
 const IRON = hex("#6b4a2a"), IRON_L = hex("#9a6f42"), IRON_D = hex("#3f2a16"), DECK = hex("#8a6a3a"), DECK_L = hex("#a8875a");
 const PANEL = hex("#0e1422");
+const GOLD_L = hex("#e0a04a"), GOLD = hex("#c48a3a"), GOLD_D = hex("#8a5a20"), DECK_N = hex("#b07c34"), DECK_GLOW = hex("#ffd070"), SPARK = hex("#ffffff"), BEACON = hex("#b8e4ff");
 
 const TOP = 80;
 /** Half-width at model height y — the old pixel art's bell curve: ~1 at the apex, 32 at the ground. */
@@ -60,11 +65,21 @@ const lattice: TexFn = (x, y) => {
   return null;
 };
 
+/** The lattice under sodium light: the same truss with its irons shifted gold; `sparkle` scatters bright cells over ~4% of it. */
+const latticeNight = (sparkle: boolean): TexFn => (x, y, z) => {
+  const c = lattice(x, y, z);
+  if (!c) return null;
+  if (sparkle && hash(Math.floor(x * 2), Math.floor(y * 2), Math.floor(z)) > 0.96) return SPARK;
+  return c === IRON_L ? GOLD_L : c === IRON_D ? GOLD_D : GOLD;
+};
+
 export const eiffelTower: StructureModel = {
   frame: { x: -35, y: 0, w: 70, h: 84 },
   at: { x: 45, y: 40 },
   view: { yaw: 0, pitch: 7 },
-  build(): Part[] {
+  nightFrames: 2,
+  build(opts): Part[] {
+    const night = !!opts?.night, sparkle = night && (opts?.frame ?? 0) === 1;
     // the two lattice planes
     const rows = (sign: number) => {
       const out: [[number, number, number], [number, number, number]][] = [];
@@ -100,14 +115,35 @@ export const eiffelTower: StructureModel = {
       transform(box(2.2, 2.5, 2.2, IRON), { t: [0, TOP + 1, 0] }),
       transform(cylinder(0.35, 2.5, 6, IRON_D), { t: [0, TOP + 2.7, 0] }),
     );
+    if (!night) {
+      return [
+        part(back, { tex: lattice, ks: 0.2, shininess: 12 }),
+        part(front, { tex: lattice, ks: 0.25, shininess: 14 }),
+        part(decks, { ks: 0.2, shininess: 12 }),
+        part(rails, { ks: 0.3 }),
+        part(plate, { tex: plateTex, ks: 0.15 }),
+        part(recess, { ks: 0.1 }),
+        part(apex, { ks: 0.2 }),
+      ];
+    }
+    // ---- night: golden floodlight, decks lit from below, the beacon; frame 1 sparkles ----
+    const latticeN = latticeNight(sparkle);
+    // decks glow at their undersides (the floodlights sit on the deck below, shining up)
+    const deckTexNight: TexFn = (_x, y) => {
+      const y0 = y < 30 ? ARCH_Y + 1.0 : y < 48 ? 36 : 54;
+      return mixRGB(DECK_GLOW, DECK_N, Math.max(0, Math.min(1, (y - y0) / 1.4)));
+    };
+    const plateTexNight: TexFn = (x, y, z) => { const c = plateTex(x, y, z); return c ? (c === IRON_D ? GOLD_D : GOLD) : null; };
+    const beacon = transform(box(1.8, 1.8, 1.8, BEACON), { t: [0, TOP + 3, 0] });
     return [
-      part(back, { tex: lattice, ks: 0.2, shininess: 12 }),
-      part(front, { tex: lattice, ks: 0.25, shininess: 14 }),
-      part(decks, { ks: 0.2, shininess: 12 }),
-      part(rails, { ks: 0.3 }),
-      part(plate, { tex: plateTex, ks: 0.15 }),
+      part(back, { tex: latticeN, ks: 0.2, shininess: 12, emissive: 1.4 }),
+      part(front, { tex: latticeN, ks: 0.25, shininess: 14, emissive: 1.5 }),
+      part(bakeLoc(decks), { tex: deckTexNight, ks: 0.2, shininess: 12, emissive: 1.5 }),
+      part(rails, { ks: 0.3, emissive: 1.3 }),
+      part(plate, { tex: plateTexNight, ks: 0.15, emissive: 1.4 }),
       part(recess, { ks: 0.1 }),
-      part(apex, { ks: 0.2 }),
+      part(apex, { ks: 0.2, emissive: 1.3 }),
+      part(beacon, { ks: 0, emissive: 2.2 }),
     ];
   },
 };

@@ -1,4 +1,4 @@
-import { box, cylinder, hash, hex, merge, mixRGB, part, transform, type Mesh, type Part, type RGB, type TexFn } from "../../mesh";
+import { box, cylinder, hash, hex, merge, mixRGB, part, scaleRGB, smoothstep, transform, type Mesh, type Part, type RGB, type TexFn } from "../../mesh";
 import type { StructureModel } from "../../types";
 
 /**
@@ -6,10 +6,16 @@ import type { StructureModel } from "../../types";
  * the clock panel) with the Elizabeth Tower on its right (scene 98..114) rising to a belfry, a
  * green-grey spire and a gold tip. The dial is blank — the runtime draws live hands over it at
  * scene (106, 70). Model space: ground y = 0, x = 0 at scene 80.
+ *
+ * Night (1 frame): the dial glows with a warm halo on the stone around it, the belfry and
+ * lancets are lit, the stone is floodlit from the ground (brightest at the base, fading up)
+ * and the gold tip of the spire is picked out.
  */
 const STONE = hex("#c9b58a"), STONE_L = hex("#e6d6ad"), STONE_D = hex("#8c7a55"), MORTAR = hex("#a8956a");
 const ROOF = hex("#4b6b5a"), ROOF_D = hex("#2f4a3c"), DIAL = hex("#f4ecd0"), WIN = hex("#2a2340"), GOLD = hex("#e2b24a");
 const PANEL = hex("#0e1422");
+// lit openings sit above 1.0 so they stay brighter than the floodlit stone around them
+const DIAL_N = hex("#fff4c8"), WIN_LIT = scaleRGB(hex("#fff0a0"), 1.5), FLOOD = hex("#ffd890"), HALO = hex("#ffe0a0");
 
 const bakeLoc = (m: Mesh): Mesh => ({ ...m, loc: m.pos.slice() });
 
@@ -81,11 +87,37 @@ const towerTex: TexFn = (x, y, z) => {
   return mixRGB(STONE, STONE_L, hash(Math.floor(u / 2), Math.floor(y / 8)) * 0.3);
 };
 
+/** Floodlight from the ground: warm and bright at the foot of a wall, fading toward `top`. */
+function floodlit(c: RGB, y: number, top: number): RGB {
+  const t = Math.max(0, Math.min(1, 1 - y / top));
+  return scaleRGB(mixRGB(c, FLOOD, 0.2 + 0.25 * t), 0.72 + 0.6 * t);
+}
+/** The wing at night: lancets lit, ashlar floodlit from below. */
+const wingTexNight: TexFn = (x, y, z) => {
+  const c = wingTex(x, y, z);
+  return c === WIN ? WIN_LIT : floodlit(c, y, WH * 1.6);
+};
+/** The tower at night: belfry and lancets lit, floodlit stone, a warm halo on the stone around each dial. */
+const towerTexNight: TexFn = (x, y, z) => {
+  const c = towerTex(x, y, z);
+  if (c === WIN) return WIN_LIT;
+  const front = z > TD / 2 - 0.3, side = x > TX1 - 0.3;
+  let out = floodlit(c, y, TH * 1.15);
+  if (front || side) {
+    const u = front ? x - DIAL_X : z, d = Math.hypot(u, y - DIAL_Y) - (DIAL_R + 1.5);
+    const h = smoothstep(4, 0, d);
+    if (h > 0) out = scaleRGB(mixRGB(out, HALO, 0.45 * h), 1 + 0.35 * h);
+  }
+  return out;
+};
+
 export const bigBen: StructureModel = {
   frame: { x: -40, y: 0, w: 78, h: 86 },
   at: { x: 40, y: 38 },
   view: { yaw: -7, pitch: 7 },
-  build(): Part[] {
+  nightFrames: 1,
+  build(opts): Part[] {
+    const night = !!opts?.night;
     const wing = bakeLoc(transform(box(WX1 - WX0, WH, WD, STONE, [4, 2, 2]), { t: [(WX0 + WX1) / 2, WH / 2, 0] }));
     // parapet: small merlons along the front and back edges of the wing roof
     const merlons: Mesh[] = [];
@@ -109,30 +141,52 @@ export const bigBen: StructureModel = {
       transform(cylinder(0.9, 3, 4, STONE_L, 0), { t: [px, TH + 1.4 + 1.5, pz] })));
     // spire: a green-grey pyramid to y 76, a slim spire to 80, gold tip to 82
     const spireCol: RGB | ((x: number, y: number, z: number) => RGB) = (_x, y) => mixRGB(ROOF, ROOF_D, Math.max(0, Math.min(1, y / 10 + 0.5)));
-    const spire = merge(
+    const spireBody = merge(
       transform(cylinder(11, 10, 4, spireCol, 1.6), { t: [TCX, TH + 1.4 + 5, 0], r: [0, 45, 0] }),
       transform(cylinder(1.6, 4.5, 8, ROOF_D, 0.7), { t: [TCX, TH + 1.4 + 10 + 2.25, 0] }),
+    );
+    const spireTip = merge(
       transform(cylinder(0.9, 1.4, 8, GOLD), { t: [TCX, 80.6, 0] }),
       transform(cylinder(0.5, 1.6, 8, GOLD, 0), { t: [TCX, 82.1, 0] }),
     );
+    const spire = merge(spireBody, spireTip);
     // the dial: an ornate square surround, a gold ring and a blank cream face (front and right faces)
-    const dialAt = (rot: [number, number, number], t: [number, number, number]) => transform(merge(
+    const dialSurround = (rot: [number, number, number], t: [number, number, number]) => transform(merge(
       transform(box(14.5, DIAL_R * 2 + 3, 0.6, STONE_D), { t: [0, 0, 0.3] }),
       transform(cylinder(DIAL_R, 0.6, 28, GOLD), { t: [0, 0, 0.9], r: [90, 0, 0] }),
-      transform(cylinder(DIAL_R - 1.1, 0.4, 28, DIAL), { t: [0, 0, 1.2], r: [90, 0, 0] }),
     ), { r: rot, t });
+    const dialFace = (rot: [number, number, number], t: [number, number, number], c: RGB) => transform(
+      transform(cylinder(DIAL_R - 1.1, 0.4, 28, c), { t: [0, 0, 1.2], r: [90, 0, 0] }),
+    { r: rot, t });
+    const dialAt = (rot: [number, number, number], t: [number, number, number]) => merge(dialSurround(rot, t), dialFace(rot, t, DIAL));
     const dials = merge(
       dialAt([0, 0, 0], [DIAL_X, DIAL_Y, TD / 2]),
       dialAt([0, 90, 0], [TX1, DIAL_Y, 0]),
     );
+    if (!night) {
+      return [
+        part(wing, { tex: withHole(wingTex, -26, 10, 4, 20, WD / 2), ks: 0.12, shininess: 8 }),
+        part(merge(...merlons), { ks: 0.12, shininess: 8 }),
+        part(recess, { ks: 0.1 }),
+        part(tower, { tex: towerTex, ks: 0.12, shininess: 8 }),
+        part(merge(courses, pinnacles), { ks: 0.12, shininess: 8 }),
+        part(spire, { ks: 0.3, shininess: 24 }),
+        part(dials, { ks: 0.45, shininess: 30 }),
+      ];
+    }
+    // ---- night: glowing dials, lit openings, floodlit stone, bright gold tip ----
+    const surrounds = merge(dialSurround([0, 0, 0], [DIAL_X, DIAL_Y, TD / 2]), dialSurround([0, 90, 0], [TX1, DIAL_Y, 0]));
+    const faces = merge(dialFace([0, 0, 0], [DIAL_X, DIAL_Y, TD / 2], DIAL_N), dialFace([0, 90, 0], [TX1, DIAL_Y, 0], DIAL_N));
     return [
-      part(wing, { tex: withHole(wingTex, -26, 10, 4, 20, WD / 2), ks: 0.12, shininess: 8 }),
-      part(merge(...merlons), { ks: 0.12, shininess: 8 }),
+      part(wing, { tex: withHole(wingTexNight, -26, 10, 4, 20, WD / 2), ks: 0.12, shininess: 8, emissive: 1.0 }),
+      part(merge(...merlons), { ks: 0.12, shininess: 8, emissive: 0.7 }),
       part(recess, { ks: 0.1 }),
-      part(tower, { tex: towerTex, ks: 0.12, shininess: 8 }),
-      part(merge(courses, pinnacles), { ks: 0.12, shininess: 8 }),
-      part(spire, { ks: 0.3, shininess: 24 }),
-      part(dials, { ks: 0.45, shininess: 30 }),
+      part(tower, { tex: towerTexNight, ks: 0.12, shininess: 8, emissive: 1.0 }),
+      part(merge(courses, pinnacles), { ks: 0.12, shininess: 8, emissive: 0.75 }),
+      part(spireBody, { ks: 0.3, shininess: 24, emissive: 0.7 }),
+      part(spireTip, { ks: 0.3, shininess: 24, emissive: 2.0 }),
+      part(surrounds, { ks: 0.45, shininess: 30, emissive: 1.1 }),
+      part(faces, { ks: 0.1, shininess: 30, emissive: 1.3 }),
     ];
   },
 };

@@ -10,16 +10,16 @@ export const FISH_SPRITES = {
   peaPuffer: { w: 13, h: 11, frames: 4, row: 5, eye: [8.01, 4.68], mouth: [10.14, 5.94], hit: [10, 8] },
   whiteCloud: { w: 14, h: 8, frames: 4, row: 6, eye: [9.80, 3.87], mouth: [11.32, 4.16], hit: [10, 5] },
 } as const;
-export const STRUCTURE_SHEET = { w: 100, h: 1582 };
+export const STRUCTURE_SHEET = { w: 100, h: 2296 };
 export const STRUCTURE_SPRITES = {
-  castle: { x: 49, y: 58, w: 62, h: 66, sy: 0 },
-  reunionTower: { x: 53, y: 36, w: 54, h: 88, sy: 66, night: [154, 242, 330, 418, 506, 594, 682] },
-  eiffelTower: { x: 45, y: 40, w: 70, h: 84, sy: 770 },
-  bigBen: { x: 40, y: 38, w: 78, h: 86, sy: 854 },
-  parthenon: { x: 38, y: 72, w: 84, h: 52, sy: 940 },
-  stonehenge: { x: 34, y: 74, w: 92, h: 50, sy: 992 },
-  pineapple: { x: 54, y: 50, w: 52, h: 74, sy: 1042 },
-  dallasCityHall: { x: 38, y: 46, w: 84, h: 78, sy: 1116 },
-  dallasSkyline: { x: 30, y: 36, w: 100, h: 88, sy: 1194, night: [1282, 1370] },
-  omniHotel: { x: 34, y: 62, w: 92, h: 62, sy: 1458, night: [1520] },
+  castle: { x: 49, y: 58, w: 62, h: 66, sy: 0, night: [66, 132] },
+  reunionTower: { x: 53, y: 36, w: 54, h: 88, sy: 198, night: [286, 374, 462, 550, 638, 726, 814] },
+  eiffelTower: { x: 45, y: 40, w: 70, h: 84, sy: 902, night: [986, 1070] },
+  bigBen: { x: 40, y: 38, w: 78, h: 86, sy: 1154, night: [1240] },
+  parthenon: { x: 38, y: 72, w: 84, h: 52, sy: 1326, night: [1378] },
+  stonehenge: { x: 34, y: 74, w: 92, h: 50, sy: 1430, night: [1480] },
+  pineapple: { x: 54, y: 50, w: 52, h: 74, sy: 1530, night: [1604, 1678] },
+  dallasCityHall: { x: 38, y: 46, w: 84, h: 78, sy: 1752, night: [1830] },
+  dallasSkyline: { x: 30, y: 36, w: 100, h: 88, sy: 1908, night: [1996, 2084] },
+  omniHotel: { x: 34, y: 62, w: 92, h: 62, sy: 2172, night: [2234] },
 } as const;

@@ -12,6 +12,10 @@ const LEAF = hex("#3f9a4a"), LEAF_L = hex("#6cc46e"), LEAF_D = hex("#2a6b33");
 const DOOR = hex("#3a5a9a"), DOOR_D = hex("#23407a"), WIN = hex("#9ad8f0"), WIN_D = hex("#4a8ab0"), GLINT = hex("#eefaff");
 const WOOD = hex("#8a5a2a"), WOOD_D = hex("#5e3c1a");
 const RECESS = hex("#0e1422");
+/** Night: a string of coloured bulbs round the rim and over the door, warm light in the windows, darker skin, dark leaves. */
+const BULBS: RGB[] = [hex("#fff1c8"), hex("#ff3a3a"), hex("#3aff5a"), hex("#4a7aff"), hex("#ffe23a")];
+const WARM = hex("#ffd88a"), WARM_L = hex("#fff2cc"), WARM_D = hex("#c08a40");
+const LEAF_N = hex("#1d4a26"), LEAF_NL = hex("#2f6b38"), LEAF_ND = hex("#132e18"), DOOR_N = hex("#1e3260"), DOOR_ND = hex("#101d3a");
 const VIEW: View = { yaw: -7, pitch: 7 };
 /** Clock box in sprite space: scene 62..98 × 94..110. */
 const CLOCK: SBox = { x0: -18, x1: 18, y0: 14, y1: 30 };
@@ -105,12 +109,65 @@ const glassTex: TexFn = (x, y) => {
   if (Math.hypot(x - px + 1.1, y - py - 1.1) < 0.7) return GLINT;
   return r < 2.1 ? WIN : WIN_D;
 };
+/** The crown: back row `a`→`b`, front rows `b`→`c`, all leaning outward. */
+function crown(a: RGB, b: RGB, c: RGB): Mesh {
+  return merge(
+    leaf(-7, -5, 15, -32, 25, a, b), leaf(7, -5, 15, 32, -25, a, b), leaf(0, -7, 13, 0, 0, a, b),
+    leaf(-2, -6, 18, -8, 10, a, b), leaf(2.5, -6, 17, 10, -10, a, b),
+    leaf(-4.5, -1, 21, -18, 15, b, c), leaf(4.5, -1, 21, 18, -15, b, c),
+    leaf(-10, -2, 14, -45, 30, b, c), leaf(10, -2, 14, 45, -30, b, c),
+    leaf(0, 3, 25, 0, 0, b, c), leaf(-3, 4, 17, -12, 12, b, c), leaf(3, 4, 17, 12, -12, b, c),
+  );
+}
+
+// ---- night ----------------------------------------------------------------------------------
+/** Door after dark: darker paint, the little window lit warm from inside. */
+const doorTexNight: TexFn = (x, y) => {
+  const c = doorTex(x, y);
+  if (c === DOOR) return DOOR_N;
+  if (c === DOOR_D) return DOOR_ND;
+  if (c === WIN) return WARM_L;
+  if (c === SKIN_L) return SKIN;
+  return c;
+};
+/** Portholes glowing warm from inside. */
+const glassTexNight: TexFn = (x, y, z) => {
+  const c = glassTex(x, y, z);
+  if (c === GLINT) return WARM_L;
+  if (c === WIN) return WARM;
+  return mixRGB(WARM, WARM_D, 0.5);
+};
+const rimTexNight: TexFn = (x, y, z) => mixRGB(rimTex(x, y, z), DOOR_ND, 0.35);
+/**
+ * The bulb string: small spheres every ~2.5 units along the body's outline (from the sand on the
+ * right, over the crown, down to the sand on the left) and then over the door arch, colours
+ * cycling through BULBS and shifted `k` steps so alternating frames chase.
+ */
+function bulbString(k: number): Mesh {
+  const pts: [number, number, number][] = [];
+  // rim: walk the x/y outline ellipse at a fine step and drop a bulb every 2.5 units of arc, slightly proud (×1.03) and toward the viewer
+  const a0 = Math.asin(-CY / RY) + 0.08, a1 = Math.PI - Math.asin(-CY / RY) - 0.08;
+  let acc = 2.5, px = RX * Math.cos(a0), py = CY + RY * Math.sin(a0);
+  for (let a = a0; a <= a1; a += 0.002) {
+    const x = RX * Math.cos(a), y = CY + RY * Math.sin(a);
+    acc += Math.hypot(x - px, y - py); px = x; py = y;
+    if (acc >= 2.5) { acc -= 2.5; pts.push([x * 1.03, CY + (y - CY) * 1.03, 1.2]); }
+  }
+  // door arch: r 5.2 about the arch centre (0, 8), left foot to right foot, lifted off the skin
+  for (let i = 0; i <= 6; i++) {
+    const t = Math.PI - (i / 6) * Math.PI, x = 5.2 * Math.cos(t), y = 8 + 5.2 * Math.sin(t);
+    pts.push([x, y, surfZ(x, y) + 1.5]);
+  }
+  return merge(...pts.map((p, i) => transform(ellipsoid(0.6, 0.6, 0.6, 8, 5, BULBS[(i + k) % BULBS.length]), { t: p })));
+}
 
 export const pineapple: StructureModel = {
   frame: { x: -26, y: 0, w: 52, h: 74 },
   at: { x: 54, y: 50 },
   view: VIEW,
-  build(): Part[] {
+  nightFrames: 2,
+  build(opts): Part[] {
+    const night = !!opts?.night;
     const body = put(ellipsoid(RX, RY, RZ, 28, 16, SKIN), { t: [0, CY, 0] });
     const panel = facing(CLOCK, 6.5, VIEW, RECESS);
     // arched door, x -4..4 × y 0..12, draped on the skin
@@ -124,14 +181,19 @@ export const pineapple: StructureModel = {
       glass.push(onSkin(put(cylinder(2.9, 0.6, 20, WIN_D), { r: [90, 0, 0], t: [px, py, 0] }), 1.3));
     }
     // the crown: back row dark, middle green, front light, all leaning outward
-    const leaves = merge(
-      leaf(-7, -5, 15, -32, 25, LEAF_D, LEAF), leaf(7, -5, 15, 32, -25, LEAF_D, LEAF), leaf(0, -7, 13, 0, 0, LEAF_D, LEAF),
-      leaf(-2, -6, 18, -8, 10, LEAF_D, LEAF), leaf(2.5, -6, 17, 10, -10, LEAF_D, LEAF),
-      leaf(-4.5, -1, 21, -18, 15, LEAF, LEAF_L), leaf(4.5, -1, 21, 18, -15, LEAF, LEAF_L),
-      leaf(-10, -2, 14, -45, 30, LEAF, LEAF_L), leaf(10, -2, 14, 45, -30, LEAF, LEAF_L),
-      leaf(0, 3, 25, 0, 0, LEAF, LEAF_L), leaf(-3, 4, 17, -12, 12, LEAF, LEAF_L), leaf(3, 4, 17, 12, -12, LEAF, LEAF_L),
-    );
+    const leaves = crown(LEAF_D, LEAF, LEAF_L);
     const cut = (t: TexFn) => withRecess(t, CLOCK, VIEW, SKIN_L, SKIN_D, 0); // fittings never paint over the clock box
+    if (night) {
+      return [
+        part(body, { tex: withRecess(skin, CLOCK, VIEW, SKIN_L, SKIN_D), ks: 0.3, shininess: 20, emissive: 0.75 }),
+        part(panel, { ks: 0 }),
+        part(door, { tex: doorTexNight, ks: 0.2, shininess: 14, emissive: 1.2 }),
+        part(merge(...rims), { tex: cut(rimTexNight), ks: 0.15, shininess: 10, emissive: 0.8 }),
+        part(merge(...glass), { tex: cut(glassTexNight), ks: 0.2, shininess: 40, emissive: 1.6 }),
+        part(crown(LEAF_ND, LEAF_N, LEAF_NL), { ks: 0.2, shininess: 12, emissive: 0.7 }),
+        part(bulbString(opts?.frame ?? 0), { ks: 0, emissive: 2.5 }),
+      ];
+    }
     return [
       part(body, { tex: withRecess(skin, CLOCK, VIEW, SKIN_L, SKIN_D), ks: 0.3, shininess: 20 }),
       part(panel, { ks: 0 }),
