@@ -1,8 +1,9 @@
 /**
- * The Omni's LED facade. A 40×36 grid of cells over the display area; slides are composed into
- * the grid (pixel graphics, a scrolling message, the date/time, the weather) and every lit cell
- * is drawn as a small glowing square. Which slide is up comes from game/omni.ts (wall-clock
- * aligned, 15 minutes each).
+ * The Omni's LED facade. The whole front of the hotel is a field of cells (one per logical
+ * unit, 84×32 on the current sprite) laid out as horizontal floor strips, like the real
+ * building's LED bands. Slides are composed into the grid (pixel graphics, a scrolling message,
+ * the date/time, the weather) and every lit cell is drawn as a short glowing strip segment.
+ * Which slide is up comes from game/omni.ts (wall-clock aligned, 15 minutes each).
  */
 import { FONT_3X5 } from "./pixelFont";
 import type { Box } from "./clock";
@@ -20,15 +21,13 @@ export interface OmniLive {
   weather: Weather | null;
 }
 
-const COLS = 40, ROWS = 36;
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
-type Grid = Map<number, string>; // cell index → colour
-const key = (x: number, y: number) => y * COLS + x;
+interface Grid { cols: number; rows: number; cells: Map<number, string> } // cell index → colour
 
 function plot(g: Grid, x: number, y: number, c: string) {
-  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
-  g.set(key(x, y), c);
+  if (x < 0 || y < 0 || x >= g.cols || y >= g.rows) return;
+  g.cells.set(y * g.cols + x, c);
 }
 
 /** Letter `text` with the 3×5 font at integer `scale` (cells); returns the width in cells. */
@@ -83,8 +82,9 @@ const ICONS: Record<WeatherIcon, { rows: string[]; pal: Record<string, string> }
   fog: { pal: { c: GREY }, rows: ["ccccccccc", ".........", ".ccccccc.", ".........", "ccccccccc", ".........", "..ccccc.."] },
 };
 
-function compose(live: OmniLive): Grid {
-  const g: Grid = new Map();
+function compose(live: OmniLive, cols: number, rows: number): Grid {
+  const g: Grid = { cols, rows, cells: new Map() };
+  const COLS = cols, ROWS = rows;
   const ms = live.now.getTime();
   const slide = slideAt(ms, !!live.weather);
   if (slide === "graphics") {
@@ -95,51 +95,58 @@ function compose(live: OmniLive): Grid {
     art(g, gr.rows, gr.pal, Math.floor((COLS - w) / 2), Math.floor((ROWS - h) / 2), s);
   } else if (slide === "message") {
     const text = live.message || "HELLO";
-    const scale = 2, w = textWidth(text, scale);
-    // scroll right → left at 10 cells/s, with a gap before it comes round again
-    const period = w + COLS + 8;
-    const off = Math.floor((live.t * 10) % period);
-    letter(g, text, COLS - off, Math.floor((ROWS - 5 * scale) / 2), scale, WHITE);
+    const scale = 3, w = textWidth(text, scale, 2);
+    // short messages sit still, centred; longer ones scroll right → left at 14 cells/s
+    if (w <= COLS - 4) letter(g, text, Math.floor((COLS - w) / 2), Math.floor((ROWS - 5 * scale) / 2), scale, WHITE, 2);
+    else {
+      const period = w + COLS + 10;
+      const off = Math.floor((live.t * 14) % period);
+      letter(g, text, COLS - off, Math.floor((ROWS - 5 * scale) / 2), scale, WHITE, 2);
+    }
   } else if (slide === "datetime") {
     const { display, meridiem } = formatClock(live.now, live.fmt);
-    const tw = textWidth(display, 2);
-    const mw = meridiem ? textWidth(meridiem, 1) + 2 : 0;
+    const tw = textWidth(display, 3, 2);
+    const mw = meridiem ? textWidth(meridiem, 2) + 3 : 0;
     const x0 = Math.floor((COLS - tw - mw) / 2);
-    letter(g, display, x0, 6, 2, CYAN);
-    if (meridiem) letter(g, meridiem, x0 + tw + 2, 11, 1, CYAN);
-    const d = `${MONTHS[live.now.getMonth()]} ${live.now.getDate()}`;
-    letter(g, d, Math.floor((COLS - textWidth(d, 1)) / 2), 22, 1, AMBER);
+    letter(g, display, x0, 3, 3, CYAN, 2);
+    if (meridiem) letter(g, meridiem, x0 + tw + 3, 8, 2, CYAN);
     const wd = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][live.now.getDay()];
-    letter(g, wd, Math.floor((COLS - textWidth(wd, 1)) / 2), 29, 1, AMBER);
+    const d = `${wd} ${MONTHS[live.now.getMonth()]} ${live.now.getDate()}`;
+    letter(g, d, Math.floor((COLS - textWidth(d, 2)) / 2), 21, 2, AMBER);
   } else if (slide === "weather" && live.weather) {
     const w = live.weather;
     const ic = ICONS[w.icon];
-    art(g, ic.rows, ic.pal, 3, 6, 1);
     const temp = `${w.tempF}F`;
-    letter(g, temp, 16, 7, 2, AMBER);
-    letter(g, w.label, Math.floor((COLS - textWidth(w.label, 1)) / 2), 24, 1, GREEN);
+    const tw = textWidth(temp, 3, 2);
+    const iconW = ic.rows[0].length * 2;
+    const x0 = Math.floor((COLS - (iconW + 4 + tw)) / 2);
+    art(g, ic.rows, ic.pal, x0, 3, 2);
+    letter(g, temp, x0 + iconW + 4, 3, 3, AMBER, 2);
+    letter(g, w.label, Math.floor((COLS - textWidth(w.label, 2)) / 2), 22, 2, GREEN);
   }
   return g;
 }
 
 /** Draw the facade's slide over `box` (scene units) — the display area of the Omni sprite. */
 export function drawOmniDisplay(ctx: CanvasRenderingContext2D, box: Box, live: OmniLive): void {
-  const g = compose(live);
-  const cw = box.w / COLS, ch = box.h / ROWS;
+  const cols = Math.round(box.w), rows = Math.round(box.h);
+  const g = compose(live, cols, rows);
+  const cw = box.w / cols, ch = box.h / rows;
   ctx.save();
-  // a faint overall glow when the panel is busy at night
-  if (live.night && g.size > 0) {
+  // a faint overall glow when the facade is busy at night
+  if (live.night && g.cells.size > 0) {
     ctx.fillStyle = "rgba(255,200,120,0.05)";
     ctx.fillRect(box.x - 1, box.y - 1, box.w + 2, box.h + 2);
   }
   const alpha = live.night ? 1 : 0.85;
-  for (const [k, color] of g) {
-    const x = box.x + (k % COLS) * cw, y = box.y + Math.floor(k / COLS) * ch;
-    ctx.globalAlpha = alpha * 0.35;
+  // each lit cell is a short segment of a floor strip: full width, a little over half the row height
+  for (const [k, color] of g.cells) {
+    const x = box.x + (k % cols) * cw, y = box.y + Math.floor(k / cols) * ch;
+    ctx.globalAlpha = alpha * 0.3;
     ctx.fillStyle = color;
-    ctx.fillRect(x - cw * 0.25, y - ch * 0.25, cw * 1.5, ch * 1.5);
+    ctx.fillRect(x - cw * 0.15, y + ch * 0.05, cw * 1.3, ch * 0.9);
     ctx.globalAlpha = alpha;
-    ctx.fillRect(x + cw * 0.1, y + ch * 0.1, cw * 0.8, ch * 0.8);
+    ctx.fillRect(x, y + ch * 0.22, cw, ch * 0.56);
   }
   ctx.restore();
 }

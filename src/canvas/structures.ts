@@ -7,6 +7,7 @@
 import { type Atlas, PX, STRUCTURE } from "./atlas";
 import { type Box, CLOCK_H, CLOCK_W, disc, drawClockPanel, drawMeridiemPip, rect } from "./clock";
 import { drawOmniDisplay, type OmniLive } from "./omni";
+import { drawText, textWidth } from "./pixelFont";
 import type { StructureId, TimeFormat } from "../game/types";
 import type { Weather } from "../game/omni";
 
@@ -83,11 +84,14 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
     nightFrame: (_now, t) => Math.floor(t * 0.7) % 2, // windows twinkle between two lit patterns
   }),
   omniHotel: def("omniHotel", {
-    clock: clockBox(106), pip: [110, 52], edge: "#8d93a4",
-    // the LED facade: scene 60..100 × 64..100
+    clock: clockBox(106), pip: [116, 58], edge: "#8d93a4",
+    // the LED field covers the whole facade: scene 38..122 × 71..103 (one cell per unit)
     extras(ctx, now, fmt, live) {
       const omni: OmniLive = { now, fmt, t: live.t, night: live.night, message: live.omniMessage, weather: live.weather };
-      drawOmniDisplay(ctx, { x: 60, y: 64, w: 40, h: 36 }, omni);
+      drawOmniDisplay(ctx, { x: 38, y: 71, w: 84, h: 32 }, omni);
+      // the crown sign
+      const w = textWidth("OMNI HOTEL", 0.6, 0.6);
+      drawText(ctx, "OMNI HOTEL", 80 - w / 2, 64.4, 0.6, live.night ? "#fff6dc" : "#d9dde8", 0.6);
     },
   }),
 };
