@@ -40,7 +40,11 @@ const boundsOf = (id: StructureId): Box => { const s = STRUCTURE[id]; return { x
 const def = (id: StructureId, rest: Omit<Structure, "id" | "bounds">): Structure => ({ id, get bounds() { return boundsOf(id); }, ...rest });
 
 export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
-  castle: def("castle", { clock: clockBox(92), pip: [42, 66], edge: "#5c5e73" }),
+  castle: def("castle", {
+    clock: clockBox(92), pip: [42, 66], edge: "#5c5e73",
+    // candlelight: mostly frame 0, a brief dip to frame 1 now and then
+    nightFrame: (_now, t) => ((Math.floor(t * 7) * 2654435761) >>> 0) % 5 === 0 ? 1 : 0,
+  }),
   reunionTower: def("reunionTower", {
     clock: clockBox(106), pip: [96, 42], edge: "#6a7290",
     // lamp programs rotate by the minute: steady → chase (thirds at 3 Hz) → sweep (band rising at 1.5 Hz)
@@ -54,6 +58,8 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
   eiffelTower: def("eiffelTower", {
     passages: [{ x: 64, y: 108, w: 32, h: 14 }],
     clock: clockBox(88), pip: [80, 32], edge: "#9a6f42",
+    // golden all night; the sparkle runs for the first 30 s of every fifth minute, twinkling at 8 Hz
+    nightFrame: (now, t) => (now.getMinutes() % 5 === 0 && now.getSeconds() < 30 ? Math.floor(t * 8) % 2 : 0),
   }),
   bigBen: def("bigBen", {
     clock: clockBox(104, 54), pip: [106, 36], edge: "#8c7a55",
@@ -75,7 +81,10 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
     passages: [{ x: 65, y: 96, w: 30, h: 26 }],
     clock: clockBox(78), pip: [80, 72], edge: "#5d594e",
   }),
-  pineapple: def("pineapple", { clock: clockBox(94), pip: [80, 48], edge: "#8a5a2a" }),
+  pineapple: def("pineapple", {
+    clock: clockBox(94), pip: [80, 48], edge: "#8a5a2a",
+    nightFrame: (_now, t) => Math.floor(t * 1.6) % 2, // the bulb string chases
+  }),
   dallasCityHall: def("dallasCityHall", { clock: clockBox(90, 58), pip: [80, 44], edge: "#8b8579" }),
   dallasSkyline: def("dallasSkyline", {
     // open water between the small Reunion Tower and the podium, and between Renaissance Tower and the Omni
