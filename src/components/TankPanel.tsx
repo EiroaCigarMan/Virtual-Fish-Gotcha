@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { SPECIES, STRUCTURES, TANKS, speciesInfo } from "../game/catalog";
 import type { SpeciesId, StructureId, TankShape } from "../game/types";
+import { MAX_OMNI_MESSAGE } from "../game/omni";
 
 /**
  * Tank shape, structure and fish pickers. Tank and structure swap instantly (cosmetic).
  * Picking a different species starts a new fish, so it asks first.
  */
-export function TankPanel({ structure, species, tank, onStructure, onSpecies, onTank }: {
-  structure: StructureId; species: SpeciesId; tank: TankShape;
-  onStructure: (s: StructureId) => void; onSpecies: (s: SpeciesId) => void; onTank: (t: TankShape) => void;
+export function TankPanel({ structure, species, tank, omniMessage, onStructure, onSpecies, onTank, onOmniMessage }: {
+  structure: StructureId; species: SpeciesId; tank: TankShape; omniMessage: string;
+  onStructure: (s: StructureId) => void; onSpecies: (s: SpeciesId) => void; onTank: (t: TankShape) => void; onOmniMessage: (m: string) => void;
 }) {
   const [pending, setPending] = useState<SpeciesId | null>(null);
+  const [draft, setDraft] = useState(omniMessage);
   return (
     <>
       <div className="row">
@@ -31,6 +33,15 @@ export function TankPanel({ structure, species, tank, onStructure, onSpecies, on
           </button>
         ))}
       </div>
+      {structure === "omniHotel" && (
+        <form className="row" onSubmit={(e) => { e.preventDefault(); onOmniMessage(draft); }}>
+          <label htmlFor="omni-msg">Omni says</label>
+          <span className="seg">
+            <input id="omni-msg" className="text" value={draft} maxLength={MAX_OMNI_MESSAGE} placeholder="HI <fish name>" onChange={(e) => setDraft(e.target.value)} aria-label="Message the Omni Hotel scrolls" />
+            <button type="submit" className="seg-btn">Show</button>
+          </span>
+        </form>
+      )}
       <h3 className="sub-title">Fish</h3>
       <div className="picker" role="radiogroup" aria-label="Fish species">
         {SPECIES.map((s) => (

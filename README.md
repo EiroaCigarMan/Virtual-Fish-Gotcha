@@ -1,15 +1,16 @@
 # 🐠 virtual-fish-gotcha
 
-A cozy virtual fish that lives in your browser, drawn the way a 2001 console would have drawn it: low-poly 3D fish and landmarks baked to sprites, a glass bowl with real highlights, and an LED clock that shows the date. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and nine structures.
+A cozy virtual fish that lives in your browser, drawn the way a 2001 console would have drawn it: low-poly 3D fish and landmarks baked to sprites, a glass bowl with real highlights, and an LED clock that shows the date. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and ten structures.
 
 <p align="center"><img src="docs/img/goldfish-bowl.png" width="480" alt="A shaded low-poly goldfish swimming in a glass bowl above a stone castle whose LED clock reads the time and date"></p>
 
 - Scene rendered at 640×576 on a `<canvas>`, React for the panels. Every fish and landmark is a low-poly 3D model rendered offline to a sprite sheet by an in-repo software rasterizer (`bun run sprites` — Gouraud shading, specular, procedural textures, no GL); the bowl, water, plants and bubbles are vector-shaded at runtime.
 - Stats **Full / Happy / Clean** decay in real time — including while the tab is closed (computed from the last-seen timestamp on load).
 - The fish never dies; low stats just change its mood, speed, and the water colour.
-- **Nine structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid), a certain pineapple, and the **Dallas skyline** — Reunion Tower, Fountain Place, Bank of America Plaza, Renaissance Tower and the Omni, with open water between them the fish swim through; it lights up at night (green argon outline, lit spire, the Omni's LED band) and nudges a round bowl to the square tank the first time you pick it. Swap any time from the **Tank** tab — it's cosmetic.
+- **Ten structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid), a certain pineapple, and the **Dallas skyline** — Reunion Tower, Fountain Place, Bank of America Plaza, Renaissance Tower and the Omni, with open water between them the fish swim through; it lights up at night (green argon outline, lit spire, the Omni's LED band) and nudges a round bowl to the square tank the first time you pick it; and the **Omni Hotel** with its LED facade. Swap any time from the **Tank** tab — it's cosmetic.
 - **Seven fish**: Goldfish (default), Betta, Endler's Livebearer, Chili Rasbora, Scarlet Badis, Pea Puffer, White Cloud Mountain Minnow. Each has its own sprite, swim speed, and the two tiny ones swim as a school. Picking a new species starts a new fish (it asks first); the structure and clock format carry over.
 - **Round or square tank** — a toggle in the **Tank** tab swaps the glass bowl for a square-cornered aquarium; every landmark fits both, and the choice is persisted.
+- **The Omni Hotel talks.** Its facade is a 40×36 LED panel that cycles four slides every quarter-hour, aligned to the wall clock: pixel graphics (star, heart, fish, the Texas flag, a smiley) → a scrolling message you type in the **Tank** tab (kept in the save; defaults to a hello to your fish) → the date and time → the current weather. Weather is the app's **only network call**: Open-Meteo (no key), asked only while the Omni is up, once every 15 minutes, for your location if the browser allows it (Dallas if not). If the fetch fails the slide is simply skipped.
 - **Night falls in Dallas.** Sunrise and sunset are computed locally for Dallas (NOAA solar equations in `game/solar.ts`, no network) and between them the room and water darken and the landmarks dim — except Reunion Tower, whose ball lights up and runs lamp programs that rotate by the minute (steady → chase → sweep). The clock stays lit.
 - The **LED clock** shows the current time in **12h or 24h** (toggle in Settings, persisted) with the date (`mm/dd/yy`) in a smaller row beneath.
 - Everything is stored in `localStorage`. Fully static: `dist/` deploys anywhere.
@@ -22,7 +23,7 @@ A cozy virtual fish that lives in your browser, drawn the way a 2001 console wou
 
 **Live:** https://eiroacigarman.github.io/Virtual-Fish-Gotcha/ (auto-deployed from `main` by GitHub Actions → Pages)
 
-Requires Node ≥ 20 **or** Bun. No other setup, no accounts, no backend.
+Requires Node ≥ 20 **or** Bun. No other setup, no accounts, no backend (the Omni's weather slide calls Open-Meteo from the browser; nothing else leaves the page).
 
 ```bash
 # with bun

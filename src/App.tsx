@@ -8,17 +8,20 @@ import { StatsPanel } from "./components/StatsPanel";
 import { TankPanel } from "./components/TankPanel";
 import { speciesInfo } from "./game/catalog";
 import { useFishGame } from "./game/useFishGame";
+import { useWeather } from "./game/useWeather";
 import type { ActionName } from "./game/types";
 
 export default function App() {
-  const { state, now, mood, act, setTimeFormat, setFishName, setStructure, setTank, changeSpecies, reset } = useFishGame();
+  const { state, now, mood, act, setTimeFormat, setFishName, setStructure, setTank, setOmniMessage, changeSpecies, reset } = useFishGame();
+  // the only network call in the app, and only while the Omni is up
+  const weather = useWeather(state.structure === "omniHotel");
   const [renaming, setRenaming] = useState(false);
   const canvasRef = useRef<FishCanvasHandle>(null);
   const species = speciesInfo(state.species);
 
   const inputs = useMemo(
-    () => ({ mood, cleanliness: state.cleanliness, happiness: state.happiness, timeFormat: state.timeFormat, structure: state.structure, species: state.species, tank: state.tank }),
-    [mood, state.cleanliness, state.happiness, state.timeFormat, state.structure, state.species, state.tank],
+    () => ({ mood, cleanliness: state.cleanliness, happiness: state.happiness, timeFormat: state.timeFormat, structure: state.structure, species: state.species, tank: state.tank, omniMessage: state.omniMessage || (state.fishName ? `HI ${state.fishName.toUpperCase()}` : ""), weather }),
+    [mood, state.cleanliness, state.happiness, state.timeFormat, state.structure, state.species, state.tank, state.omniMessage, state.fishName, weather],
   );
 
   const onAct = (a: ActionName) => {
@@ -28,7 +31,7 @@ export default function App() {
   return (
     <main className="app">
       <header className="hdr">
-        <h1>🐠 virtual-fish-gotcha</h1>
+        <h1>🐠 Virtual Fish-Gotcha</h1>
         <p className="sub">a tiny {species.label.toLowerCase()} who lives in your browser</p>
       </header>
       <div className="layout">
@@ -37,7 +40,7 @@ export default function App() {
           <StatsPanel state={state} mood={mood} />
           <SidePanel tabs={{
             care: <ActionsPanel state={state} now={now} onAct={onAct} />,
-            tank: <TankPanel structure={state.structure} species={state.species} tank={state.tank} onStructure={setStructure} onSpecies={changeSpecies} onTank={setTank} />,
+            tank: <TankPanel structure={state.structure} species={state.species} tank={state.tank} omniMessage={state.omniMessage} onStructure={setStructure} onSpecies={changeSpecies} onTank={setTank} onOmniMessage={setOmniMessage} />,
             settings: <SettingsPanel timeFormat={state.timeFormat} now={now} onTimeFormat={setTimeFormat} onReset={reset} onRename={() => setRenaming(true)} />,
           }} />
         </aside>

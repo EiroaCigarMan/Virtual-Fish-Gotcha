@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SPECIES, SPECIES_FLAVOR, STRUCTURES, isSpeciesId, isStructureId } from "../catalog";
-import { defaultState, newFish, setStructure, setTank } from "../state";
+import { defaultState, newFish, setOmniMessage, setStructure, setTank } from "../state";
 import { coerceState } from "../storage";
 import { FISH } from "../../canvas/atlas";
 import { STRUCTURE_REGISTRY } from "../../canvas/structures";
@@ -9,7 +9,7 @@ describe("catalog", () => {
   test("every structure and species has a renderer and flavor", () => {
     for (const s of STRUCTURES) expect(STRUCTURE_REGISTRY[s.id]).toBeDefined();
     for (const s of SPECIES) { expect(FISH[s.id]).toBeDefined(); expect(SPECIES_FLAVOR[s.id]).toBeDefined(); }
-    expect(STRUCTURES).toHaveLength(9);
+    expect(STRUCTURES).toHaveLength(10);
     expect(SPECIES).toHaveLength(7);
   });
   test("structures fit inside the bowl and stand on the sand", () => {
@@ -63,6 +63,10 @@ describe("tank state", () => {
     expect(t.tank).toBe("square");
     expect(t.timeFormat).toBe("24h");
     expect(newFish(t, "betta")).toBe(t);
+    expect(newFish({ ...s, omniMessage: "HI" }, "goldfish", 1).omniMessage).toBe("HI");
+    expect(setOmniMessage(s, "howdy!").omniMessage).toBe("HOWDY!");
+    const h = { ...s, omniMessage: "HOWDY!" };
+    expect(setOmniMessage(h, "howdy!")).toBe(h); // same text → same object
   });
 });
 
@@ -70,8 +74,9 @@ describe("storage", () => {
   test("v1 saves migrate to goldfish + castle, v2 keeps choices, junk falls back", () => {
     const v1 = { schemaVersion: 1, hunger: 50, happiness: 50, cleanliness: 50, lastSeenAt: 1, lastActionAt: {}, timeFormat: "24h", fishName: "Old", createdAt: 1 };
     const m = coerceState(v1, 2)!;
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(4);
     expect(m.tank).toBe("bowl");
+    expect(m.omniMessage).toBe("");
     expect(m.species).toBe("goldfish");
     expect(m.structure).toBe("castle");
     expect(m.fishName).toBe("Old");
@@ -81,7 +86,8 @@ describe("storage", () => {
     expect(coerceState({ ...v2, schemaVersion: 3, tank: "hexagon" }, 2)).toMatchObject({ tank: "bowl" });
     const bad = { ...v2, species: "shark", structure: "moon" };
     expect(coerceState(bad, 2)).toMatchObject({ species: "goldfish", structure: "castle" });
-    expect(coerceState({ schemaVersion: 4 }, 2)).toBeNull();
+    expect(coerceState({ ...v2, schemaVersion: 4, omniMessage: "go stars <3" }, 2)).toMatchObject({ omniMessage: "GO STARS 3" });
+    expect(coerceState({ schemaVersion: 5 }, 2)).toBeNull();
     expect(isSpeciesId("shark")).toBe(false);
     expect(isStructureId("castle")).toBe(true);
   });

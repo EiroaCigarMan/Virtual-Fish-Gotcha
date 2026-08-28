@@ -6,6 +6,7 @@ import { TANK_GEOMS, type TankGeom } from "./tank";
 import { SPECIES_FLAVOR } from "../game/catalog";
 import { isNight } from "../game/solar";
 import type { FishMood, SpeciesId, StructureId, TankShape, TimeFormat } from "../game/types";
+import type { Weather } from "../game/omni";
 
 /** Logical scene size. Everything below reasons in these units; the canvas is PX× bigger. */
 export const W = 160;
@@ -40,6 +41,9 @@ export interface EngineInputs {
   structure: StructureId;
   species: SpeciesId;
   tank: TankShape;
+  /** Live extras for the Omni Hotel (ignored by every other structure). */
+  omniMessage?: string;
+  weather?: Weather | null;
 }
 
 const SPEED: Record<FishMood, number> = { content: 14, hungry: 12, bored: 8, dirty: 9, sad: 5, sleepy: 7 };
@@ -173,14 +177,19 @@ export class FishEngine {
     const loop = (now: number) => {
       const dt = Math.max(0, Math.min(0.1, (now - this.last) / 1000));
       this.last = now;
-      this.t += dt;
-      this.update(dt);
+      this.tick(dt);
       this.render();
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
   }
   stop() { cancelAnimationFrame(this.raf); }
+
+  /** Advance the scene by `dt` seconds (the loop calls this; headless renders drive it directly). */
+  tick(dt: number) {
+    this.t += dt;
+    this.update(dt);
+  }
 
   // ---------- events from React ----------
   feed() {
@@ -426,7 +435,7 @@ export class FishEngine {
     if (this.atlas) {
       const atlas = this.atlas;
       for (const s of this.fishes) if (s.layer === "behind") this.drawFish(atlas, s);
-      drawStructure(ctx, atlas, this.inputs.structure, now, this.inputs.timeFormat, ROOM, night, this.t);
+      drawStructure(ctx, atlas, this.inputs.structure, now, this.inputs.timeFormat, ROOM, night, this.t, { t: this.t, night, omniMessage: this.inputs.omniMessage ?? "", weather: this.inputs.weather ?? null });
       for (const s of this.fishes) if (s.layer === "front") this.drawFish(atlas, s);
     }
 

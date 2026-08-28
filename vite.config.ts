@@ -9,7 +9,7 @@ const CSP = [
   "style-src 'self' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data:",
-  "connect-src 'none'",
+  "connect-src https://api.open-meteo.com", // the Omni's weather slide — the app's only network call
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
