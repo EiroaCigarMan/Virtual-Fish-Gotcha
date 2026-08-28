@@ -7,7 +7,7 @@ const TOP = hex("#e5731a"), MID = hex("#f7962a"), BELLY = hex("#ffc45e"), FIN = 
 const bodyColor = (_x: number, y: number): RGB => (y > 0 ? mixRGB(MID, TOP, Math.min(1, y / 3.2)) : mixRGB(MID, BELLY, Math.min(1, -y / 3)));
 
 export const goldfish: FishModel = {
-  frame: { w: 20, h: 14 },
+  frame: { w: 22, h: 14 },
   view: { yaw: -14, pitch: 6 },
   frames: 4,
   eye: [4.2, 1.0, 1.9],

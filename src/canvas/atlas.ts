@@ -18,8 +18,8 @@ export interface FishSprite {
 }
 export interface StructureSprite { x: number; y: number; w: number; h: number; sy: number }
 
-export const FISH: Record<SpeciesId, FishSprite> = FISH_SPRITES as unknown as Record<SpeciesId, FishSprite>;
-export const STRUCTURE: Record<StructureId, StructureSprite> = STRUCTURE_SPRITES as unknown as Record<StructureId, StructureSprite>;
+export const FISH: Record<SpeciesId, FishSprite> = FISH_SPRITES;
+export const STRUCTURE: Record<StructureId, StructureSprite> = STRUCTURE_SPRITES;
 export const FISH_ROW_Y = FISH_SHEET.rowY;
 
 export interface Atlas {
