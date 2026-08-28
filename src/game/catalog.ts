@@ -1,4 +1,4 @@
-import type { SpeciesId, StructureId } from "./types";
+import type { SpeciesId, StructureId, TankShape } from "./types";
 
 /** Display metadata for pickers and docs. Visuals live in `canvas/`, flavor in `SPECIES_FLAVOR`. */
 export interface CatalogEntry<Id extends string> { id: Id; label: string; emoji: string; blurb: string }
@@ -42,10 +42,17 @@ export const SPECIES_FLAVOR: Record<SpeciesId, SpeciesFlavor> = {
   whiteCloud: { speed: 1.2, school: 5 },
 };
 
+export const TANKS: CatalogEntry<TankShape>[] = [
+  { id: "bowl", label: "Round", emoji: "🫧", blurb: "The classic glass bowl" },
+  { id: "square", label: "Square", emoji: "🟦", blurb: "A square-cornered aquarium — wider, flat glass" },
+];
+
+export const DEFAULT_TANK: TankShape = "bowl";
 export const DEFAULT_STRUCTURE: StructureId = "castle";
 export const DEFAULT_SPECIES: SpeciesId = "goldfish";
 
 export const isStructureId = (v: unknown): v is StructureId => STRUCTURES.some((s) => s.id === v);
+export const isTankShape = (v: unknown): v is TankShape => TANKS.some((t) => t.id === v);
 export const isSpeciesId = (v: unknown): v is SpeciesId => SPECIES.some((s) => s.id === v);
 export const structureInfo = (id: StructureId) => STRUCTURES.find((s) => s.id === id)!;
 export const speciesInfo = (id: SpeciesId) => SPECIES.find((s) => s.id === id)!;

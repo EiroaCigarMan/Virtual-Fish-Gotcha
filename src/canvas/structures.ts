@@ -6,7 +6,6 @@
  */
 import { type Atlas, PX, STRUCTURE } from "./atlas";
 import { type Box, CLOCK_H, CLOCK_W, disc, drawClockPanel, drawMeridiemPip, rect } from "./clock";
-import { drawText, textWidth } from "./pixelFont";
 import type { StructureId, TimeFormat } from "../game/types";
 
 export interface Structure {
@@ -59,17 +58,7 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
     clock: clockBox(78), pip: [80, 72], edge: "#5d594e",
   }),
   pineapple: def("pineapple", { clock: clockBox(94), pip: [80, 48], edge: "#8a5a2a" }),
-  dallasCityHall: def("dallasCityHall", {
-    clock: clockBox(90, 58), pip: [80, 44], edge: "#8b8579",
-    extras(ctx) {
-      // the picket sign in the plaza, lettered at runtime so it stays crisp text
-      const S = { x: 97, y: 88, w: 27, h: 27 };
-      ["SAVE", "DALLAS", "CITY", "HALL!"].forEach((line, i) => {
-        const w = textWidth(line, 1);
-        drawText(ctx, line, S.x + 1 + Math.floor((S.w - 2 - w) / 2), S.y + 2 + i * 6, 1, "#8f1d1d");
-      });
-    },
-  }),
+  dallasCityHall: def("dallasCityHall", { clock: clockBox(90, 58), pip: [80, 44], edge: "#8b8579" }),
 };
 
 /** Draw a structure (sprite + live details + clock) onto a context already in logical units. */

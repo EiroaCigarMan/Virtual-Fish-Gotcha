@@ -1,17 +1,26 @@
 import { useState } from "react";
-import { SPECIES, STRUCTURES, speciesInfo } from "../game/catalog";
-import type { SpeciesId, StructureId } from "../game/types";
+import { SPECIES, STRUCTURES, TANKS, speciesInfo } from "../game/catalog";
+import type { SpeciesId, StructureId, TankShape } from "../game/types";
 
 /**
- * Structure + fish pickers. Structure swaps instantly (cosmetic). Picking a different
- * species starts a new fish, so it asks first.
+ * Tank shape, structure and fish pickers. Tank and structure swap instantly (cosmetic).
+ * Picking a different species starts a new fish, so it asks first.
  */
-export function TankPanel({ structure, species, onStructure, onSpecies }: {
-  structure: StructureId; species: SpeciesId; onStructure: (s: StructureId) => void; onSpecies: (s: SpeciesId) => void;
+export function TankPanel({ structure, species, tank, onStructure, onSpecies, onTank }: {
+  structure: StructureId; species: SpeciesId; tank: TankShape;
+  onStructure: (s: StructureId) => void; onSpecies: (s: SpeciesId) => void; onTank: (t: TankShape) => void;
 }) {
   const [pending, setPending] = useState<SpeciesId | null>(null);
   return (
     <>
+      <div className="row">
+        <span>Tank</span>
+        <div className="seg" role="radiogroup" aria-label="Tank shape">
+          {TANKS.map((t) => (
+            <button key={t.id} role="radio" aria-checked={tank === t.id} title={t.blurb} className={`seg-btn ${tank === t.id ? "on" : ""}`} onClick={() => onTank(t.id)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
       <h3 className="sub-title">Structure</h3>
       <div className="picker" role="radiogroup" aria-label="Structure">
         {STRUCTURES.map((s) => (

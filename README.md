@@ -7,10 +7,13 @@ A cozy virtual fish that lives in your browser, drawn the way a 2001 console wou
 - Scene rendered at 640×576 on a `<canvas>`, React for the panels. Every fish and landmark is a low-poly 3D model rendered offline to a sprite sheet by an in-repo software rasterizer (`bun run sprites` — Gouraud shading, specular, procedural textures, no GL); the bowl, water, plants and bubbles are vector-shaded at runtime.
 - Stats **Full / Happy / Clean** decay in real time — including while the tab is closed (computed from the last-seen timestamp on load).
 - The fish never dies; low stats just change its mood, speed, and the water colour.
-- **Eight structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid, with a lettered picket sign in the plaza), and a certain pineapple. Swap any time from the **Tank** tab — it's cosmetic.
+- **Eight structures**, each with the live clock in its lower portion: Castle, Dallas's Reunion Tower, the Eiffel Tower, Big Ben (the dial's hands move too), the Parthenon, Stonehenge, Dallas City Hall (Pei's inverted pyramid), and a certain pineapple. Swap any time from the **Tank** tab — it's cosmetic.
 - **Seven fish**: Goldfish (default), Betta, Endler's Livebearer, Chili Rasbora, Scarlet Badis, Pea Puffer, White Cloud Mountain Minnow. Each has its own sprite, swim speed, and the two tiny ones swim as a school. Picking a new species starts a new fish (it asks first); the structure and clock format carry over.
+- **Round or square tank** — a toggle in the **Tank** tab swaps the glass bowl for a square-cornered aquarium; every landmark fits both, and the choice is persisted.
 - The **LED clock** shows the current time in **12h or 24h** (toggle in Settings, persisted) with the date (`mm/dd/yy`) in a smaller row beneath.
 - Everything is stored in `localStorage`. Fully static: `dist/` deploys anywhere.
+
+<p align="center"><img src="docs/img/square-tank.png" width="480" alt="The same scene in the square-cornered aquarium: Big Ben with a school of White Cloud minnows"></p>
 
 <p align="center"><img src="docs/img/structures-and-fish.png" width="720" alt="Six bowls: Reunion Tower with an Endler, Eiffel Tower with a Betta, Big Ben with a school of White Cloud minnows, Parthenon with a Scarlet Badis, Stonehenge with a Pea Puffer, and a pineapple house with a school of Chili Rasboras — every LED clock shows the same time and date"></p>
 
@@ -45,7 +48,7 @@ bun run preview    # serve dist/ locally
 | `build` | Type-check + production bundle to `dist/` |
 | `preview` | Serve the production bundle |
 | `test` | Unit tests for decay / actions / mood / clock (`bun test`) |
-| `snapshot` | Render one frame of the bowl to a PNG without a browser: `bun run snapshot out.png [mood] [cleanliness] [12h\|24h] [seconds] [structure] [species]` — e.g. `bun run snapshot big-ben.png content 100 12h 4 bigBen whiteCloud` |
+| `snapshot` | Render one frame of the tank to a PNG without a browser: `bun run snapshot out.png [mood] [cleanliness] [12h\|24h] [seconds] [structure] [species] [bowl\|square]` — e.g. `bun run snapshot big-ben.png content 100 12h 4 bigBen whiteCloud` |
 | `sprites` | Bake every fish and structure model in `scripts/sprites/models/` into `public/sprites/*.png` + `src/canvas/generated/manifest.ts`. `--file path.ts --out dir` bakes one model for iterating; `bun scripts/sprites/preview.ts in.png out.png 6` zooms a sheet for a look. |
 | `sprites:check` | Re-bake into a temp dir and fail if the committed sheets differ by a byte (runs in CI, so the sheets always match their models). |
 
@@ -92,8 +95,8 @@ scripts/
 1. Add the id to `StructureId` / `SpeciesId` in `src/game/types.ts` and an entry in `src/game/catalog.ts` (label, emoji, blurb; species also get `speed` + `school`).
 2. Model it in `scripts/sprites/models/structures/<id>.ts` (a `StructureModel`: model space is logical scene pixels, y up, ground at 0, x = 0 at the scene's centre; `frame` + `at` place the sprite) or `scripts/sprites/models/fish/<id>.ts` (a `FishModel`: faces +x, 4 swim frames via `swimWag`, `eye`/`mouth` anchors for the mood overlays). Build it from `mesh.ts` primitives; give parts a `tex` for pattern. Preview with `bun scripts/sprites/build.ts --file <model.ts> --out /tmp/x` and `bun scripts/sprites/preview.ts`.
 3. Register it in `scripts/sprites/models/index.ts` and run `bun run sprites` (the manifest is typed against the game's ids, so a missing model fails the type-check).
-4. Structure only: add its entry to `STRUCTURE_REGISTRY` in `src/canvas/structures.ts` — the clock box (model a matching dark recess), the AM/PM pip position, the panel's edge colour, and any `passages` (openings at least 16×10 px the fish may swim through) or live `extras`.
-5. `bun test` checks passages really are open, clocks sit inside their sprites, and the sign stays legible. `bun run snapshot` shows the result without a browser.
+4. Structure only: add its entry to `STRUCTURE_REGISTRY` in `src/canvas/structures.ts` — the clock box (model a matching dark recess), the AM/PM pip position, the panel's edge colour, and any `passages` (openings at least 16×10 px the fish may swim through) or live `extras`. Keep painted pixels within x 38..122 at the sand line so it fits the round bowl too (a test checks both tanks).
+5. `bun test` checks passages really are open, clocks sit inside their sprites and are fully backed, and every structure fits both tanks. `bun run snapshot` shows the result without a browser.
 
 ## Verify offline decay yourself
 

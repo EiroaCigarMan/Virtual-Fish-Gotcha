@@ -7,11 +7,14 @@ export type FishMood = "content" | "hungry" | "bored" | "dirty" | "sad" | "sleep
 /** The structure the fish swims around. Every one carries the clock in its lower portion. */
 export type StructureId = "castle" | "reunionTower" | "eiffelTower" | "bigBen" | "parthenon" | "stonehenge" | "pineapple" | "dallasCityHall";
 
+/** The tank the scene is drawn in: the round bowl or a square-cornered aquarium. Cosmetic. */
+export type TankShape = "bowl" | "square";
+
 /** Which fish lives in the bowl. Changing species starts a new fish. */
 export type SpeciesId = "goldfish" | "betta" | "endler" | "chiliRasbora" | "scarletBadis" | "peaPuffer" | "whiteCloud";
 
 export interface GameState {
-  schemaVersion: 2;
+  schemaVersion: 3;
   hunger: number; // 0-100, higher = fuller
   happiness: number;
   cleanliness: number;
@@ -22,4 +25,5 @@ export interface GameState {
   createdAt: number;
   structure: StructureId;
   species: SpeciesId;
+  tank: TankShape;
 }

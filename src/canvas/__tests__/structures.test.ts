@@ -3,6 +3,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import { STRUCTURE_REGISTRY, drawStructure } from "../structures";
 import { type Atlas, loadAtlas, PX } from "../atlas";
 import { STRUCTURES } from "../../game/catalog";
+import { TANK_GEOMS } from "../tank";
 import { nodePlatform, publicBase } from "../../../scripts/lib/nodePlatform";
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -27,14 +28,6 @@ const paintedShare = (id: keyof typeof STRUCTURE_REGISTRY, box: Box) => {
 };
 
 /** Count pixels matching an "#rrggbb" colour inside a box. */
-const countColor = (id: keyof typeof STRUCTURE_REGISTRY, box: Box, hex: string, fmt: "12h" | "24h" = "12h") => {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  const px = pixels(id, box, fmt);
-  let n = 0;
-  for (let i = 0; i < px.length; i += 4) if (px[i] === r && px[i + 1] === g && px[i + 2] === b) n++;
-  return n;
-};
-
 describe("structure rendering", () => {
   test("declared passages are really open (≤10% painted); every structure paints inside its bounds", () => {
     for (const s of STRUCTURES) {
@@ -54,12 +47,24 @@ describe("structure rendering", () => {
     }
   });
 
-  // The sign is squeezed in beside the clock panel; if either moves the text stops being readable.
-  test("Dallas City Hall's sign stays legible — text is painted and the clock never covers it", () => {
-    const board = { x: 97, y: 88, w: 27, h: 27 };
-    for (const fmt of ["12h", "24h"] as const) {
-      expect(countColor("dallasCityHall", board, "#8f1d1d", fmt)).toBeGreaterThan(80 * PX * PX * 0.6); // the lettering
-      expect(countColor("dallasCityHall", board, "#7ef9a2", fmt)).toBe(0); // clock glow, kept clear
+  test("every structure fits inside both tanks — ≤3% of its painted pixels fall outside the glass", () => {
+    for (const s of STRUCTURES) {
+      const b = STRUCTURE_REGISTRY[s.id].bounds;
+      const px = pixels(s.id, b);
+      for (const G of Object.values(TANK_GEOMS)) {
+        let painted = 0, outside = 0;
+        for (let y = 0; y < b.h * PX; y++) for (let x = 0; x < b.w * PX; x++) {
+          if (px[(y * b.w * PX + x) * 4 + 3] <= 40) continue;
+          painted++;
+          const sx = b.x + x / PX, sy = b.y + y / PX;
+          if (Math.abs(sx - G.cx) > G.halfW(sy) || sy < G.rimY) outside++;
+        }
+        expect(outside / painted).toBeLessThanOrEqual(0.03);
+      }
     }
+  });
+
+  test("every clock recess is fully painted before the panel goes on (no see-through behind the clock)", () => {
+    for (const s of STRUCTURES) expect(paintedShare(s.id, STRUCTURE_REGISTRY[s.id].clock)).toBeGreaterThan(0.99);
   });
 });

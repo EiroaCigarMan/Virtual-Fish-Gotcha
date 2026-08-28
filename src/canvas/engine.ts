@@ -2,16 +2,15 @@ import { type Atlas, FISH, PX } from "./atlas";
 import { FishPainter } from "./fish";
 import { browserPlatform, type Platform } from "./platform";
 import { STRUCTURE_REGISTRY, drawStructure } from "./structures";
+import { TANK_GEOMS, type TankGeom } from "./tank";
 import { SPECIES_FLAVOR } from "../game/catalog";
-import type { FishMood, SpeciesId, StructureId, TimeFormat } from "../game/types";
+import type { FishMood, SpeciesId, StructureId, TankShape, TimeFormat } from "../game/types";
 
 /** Logical scene size. Everything below reasons in these units; the canvas is PX× bigger. */
 export const W = 160;
 export const H = 144;
 export { PX };
 
-/** Bowl geometry (logical px). */
-const BOWL = { cx: 80, cy: 78, r: 62, rimY: 24, waterY: 36, sandY: 124 };
 const ROOM = "#1c1730";
 
 type Layer = "behind" | "front";
@@ -39,6 +38,7 @@ export interface EngineInputs {
   timeFormat: TimeFormat;
   structure: StructureId;
   species: SpeciesId;
+  tank: TankShape;
 }
 
 const SPEED: Record<FishMood, number> = { content: 14, hungry: 12, bored: 8, dirty: 9, sad: 5, sleepy: 7 };
@@ -53,13 +53,6 @@ function mulberry32(a: number) {
   };
 }
 
-/** Half-width of the bowl circle at row y (0 if outside). */
-function halfW(y: number, r = BOWL.r): number {
-  const dy = y - BOWL.cy;
-  const v = r * r - dy * dy;
-  return v <= 0 ? 0 : Math.sqrt(v);
-}
-
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 export class FishEngine {
@@ -70,7 +63,7 @@ export class FishEngine {
   private raf = 0;
   private last = 0;
   private t = 0; // seconds since start
-  private inputs: EngineInputs = { mood: "content", cleanliness: 100, happiness: 100, timeFormat: "12h", structure: "castle", species: "goldfish" };
+  private inputs: EngineInputs = { mood: "content", cleanliness: 100, happiness: 100, timeFormat: "12h", structure: "castle", species: "goldfish", tank: "bowl" };
   /** fish[0] is the leader (runs the AI); the rest school behind it. */
   private fishes: Fish[] = [];
   private get fish(): Fish { return this.fishes[0]; }
@@ -85,6 +78,7 @@ export class FishEngine {
   private mask = new Uint8Array(W * H);
   private maskFor: StructureId | null = null;
   private scratch: HTMLCanvasElement | null = null;
+  private geom: TankGeom = TANK_GEOMS.bowl;
 
   constructor(canvas: HTMLCanvasElement, platform: Platform = browserPlatform) {
     canvas.width = W * PX; canvas.height = H * PX;
@@ -94,16 +88,24 @@ export class FishEngine {
     this.platform = platform;
     this.painter = new FishPainter(platform);
     this.spawnSchool(this.inputs.species);
+    this.seedFloor();
+  }
+
+  /** Deterministic pebbles + dirt specks for the current tank (re-seeded when the tank changes). */
+  private seedFloor() {
+    const G = this.geom;
     const rnd = mulberry32(1337);
-    for (let i = 0; i < 70; i++) {
-      const y = BOWL.sandY + 1.5 + rnd() * (BOWL.cy + BOWL.r - BOWL.sandY - 4);
-      const hw = halfW(y) - 3;
+    this.gravel = [];
+    this.dirtSpecks = [];
+    for (let i = 0; i < (G.shape === "bowl" ? 70 : 110); i++) {
+      const y = G.sandY + 1.5 + rnd() * (G.floorY - G.sandY - 4);
+      const hw = G.halfW(y) - 3;
       if (hw <= 0) continue;
-      const x = BOWL.cx - hw + rnd() * hw * 2;
+      const x = G.cx - hw + rnd() * hw * 2;
       this.gravel.push({ x, y, rx: 0.9 + rnd() * 0.9, ry: 0.6 + rnd() * 0.5, c: ["#c9a46a", "#a67c4e", "#e0c085", "#8f6a45", "#d9b98a"][Math.floor(rnd() * 5)] });
     }
     for (let i = 0; i < 40; i++) {
-      this.dirtSpecks.push({ x: rnd() * W, y: BOWL.waterY + rnd() * (BOWL.sandY - BOWL.waterY), ph: rnd() * 6.28 });
+      this.dirtSpecks.push({ x: rnd() * W, y: G.waterY + rnd() * (G.sandY - G.waterY), ph: rnd() * 6.28 });
     }
   }
 
@@ -115,7 +117,9 @@ export class FishEngine {
 
   setInputs(i: EngineInputs) {
     const speciesChanged = i.species !== this.inputs.species;
+    const tankChanged = i.tank !== this.geom.shape;
     this.inputs = i;
+    if (tankChanged) { this.geom = TANK_GEOMS[i.tank]; this.seedFloor(); this.fish.retargetIn = 0; }
     if (speciesChanged) this.spawnSchool(i.species);
     if (this.maskFor !== i.structure) this.buildMask(i.structure);
   }
@@ -175,11 +179,12 @@ export class FishEngine {
 
   // ---------- events from React ----------
   feed() {
+    const G = this.geom;
     const n = 5 + Math.floor(Math.random() * 4);
     for (let i = 0; i < n; i++) {
-      const y = BOWL.waterY + 1;
-      const hw = halfW(y) - 6;
-      this.pellets.push({ x: BOWL.cx + rand(-hw, hw), y: y - rand(0, 3), vy: rand(9, 16), ttl: 12 });
+      const y = G.waterY + 1;
+      const hw = G.halfW(y) - 6;
+      this.pellets.push({ x: G.cx + rand(-hw, hw), y: y - rand(0, 3), vy: rand(9, 16), ttl: 12 });
     }
   }
   play() {
@@ -188,11 +193,12 @@ export class FishEngine {
     for (let i = 0; i < 6; i++) this.spawnBubble(this.fish.x + rand(-4, 4), this.fish.y);
   }
   clean() {
+    const G = this.geom;
     this.cleanFlash = 1;
     for (let i = 0; i < 40; i++) {
-      const y = rand(BOWL.waterY + 2, BOWL.sandY - 2);
-      const hw = halfW(y) - 3;
-      this.particles.push({ x: BOWL.cx + rand(-hw, hw), y, vx: rand(-3, 3), vy: rand(-12, -4), ttl: rand(0.6, 1.4), c: "#e8fbff" });
+      const y = rand(G.waterY + 2, G.sandY - 2);
+      const hw = G.halfW(y) - 3;
+      this.particles.push({ x: G.cx + rand(-hw, hw), y, vx: rand(-3, 3), vy: rand(-12, -4), ttl: rand(0.6, 1.4), c: "#e8fbff" });
     }
   }
 
@@ -202,18 +208,20 @@ export class FishEngine {
 
   // ---------- simulation (unchanged from the pixel engine) ----------
   private inWater(x: number, y: number, margin: number): boolean {
-    if (y < BOWL.waterY + margin || y > BOWL.sandY - margin) return false;
-    const hw = halfW(y) - margin;
-    return Math.abs(x - BOWL.cx) <= hw;
+    const G = this.geom;
+    if (y < G.waterY + margin || y > G.sandY - margin) return false;
+    const hw = G.halfW(y) - margin;
+    return Math.abs(x - G.cx) <= hw;
   }
   private randomTarget(): [number, number] {
+    const G = this.geom;
     for (let i = 0; i < 20; i++) {
-      const y = rand(BOWL.waterY + 8, BOWL.sandY - 8);
-      const hw = halfW(y) - 12;
-      const x = BOWL.cx + rand(-hw, hw);
+      const y = rand(G.waterY + 8, G.sandY - 8);
+      const hw = G.halfW(y) - 12;
+      const x = G.cx + rand(-hw, hw);
       if (this.inWater(x, y, 10)) return [x, y];
     }
-    return [BOWL.cx, BOWL.cy];
+    return [G.cx, (G.waterY + G.sandY) / 2];
   }
   /** True if any fish in the school sits over a painted structure pixel (so a layer flip never pops). */
   private overlapsStructure(): boolean {
@@ -228,6 +236,7 @@ export class FishEngine {
   }
 
   private update(dt: number) {
+    const G = this.geom;
     const f = this.fish;
     const mood = this.inputs.mood;
     const dashing = this.t < f.dashUntil;
@@ -287,7 +296,7 @@ export class FishEngine {
       let nx = s.x + s.vx * dt, ny = s.y + s.vy * dt;
       if (!this.inWater(nx, ny, 8)) { // bounce back toward center
         s.vx *= -0.5; s.vy *= -0.5;
-        nx = s.x + (BOWL.cx - s.x) * 0.02; ny = s.y + (BOWL.cy - s.y) * 0.02;
+        nx = s.x + (G.cx - s.x) * 0.02; ny = s.y + ((G.waterY + G.sandY) / 2 - s.y) * 0.02;
         s.retargetIn = 0;
       }
       s.x = nx; s.y = ny;
@@ -302,7 +311,7 @@ export class FishEngine {
       p.vy = Math.max(6, p.vy - 4 * dt);
       const eater = this.fishes.find((s) => Math.abs(p.x - s.x) < 7 && Math.abs(p.y - s.y) < 6);
       if (eater) this.spawnBubble(eater.x + eater.facing * 6, eater.y - 2);
-      return !eater && p.ttl > 0 && p.y < BOWL.sandY - 1;
+      return !eater && p.ttl > 0 && p.y < G.sandY - 1;
     });
 
     // Bubbles
@@ -310,14 +319,14 @@ export class FishEngine {
     if (this.nextBubble <= 0) {
       const happy = this.inputs.happiness / 100;
       this.nextBubble = rand(1.2, 4) * (1.6 - happy);
-      const y = BOWL.sandY - 2;
-      const hw = halfW(y) - 6;
-      this.spawnBubble(BOWL.cx + rand(-hw, hw), y);
+      const y = G.sandY - 2;
+      const hw = G.halfW(y) - 6;
+      this.spawnBubble(G.cx + rand(-hw, hw), y);
     }
     this.bubbles = this.bubbles.filter((b) => {
       b.y -= b.vy * dt; b.wob += dt * 4;
       b.x += Math.sin(b.wob) * 4 * dt;
-      return b.y > BOWL.waterY + 1;
+      return b.y > G.waterY + 1;
     });
     // Particles
     this.particles = this.particles.filter((p) => {
@@ -328,81 +337,79 @@ export class FishEngine {
   }
 
   // ---------- rendering ----------
-  private circle(r = BOWL.r) {
-    this.ctx.beginPath();
-    this.ctx.arc(BOWL.cx, BOWL.cy, r, 0, Math.PI * 2);
-  }
-
   private render() {
     const ctx = this.ctx;
-    const { cx, cy, r } = BOWL;
+    const G = this.geom;
     const dirt = 1 - this.inputs.cleanliness / 100; // 0 clean … 1 filthy
     ctx.setTransform(PX, 0, 0, PX, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // room: a dim vertical gradient with a soft pool of light behind the bowl
+    // room: a dim vertical gradient with a soft pool of light behind the tank
     const room = ctx.createLinearGradient(0, 0, 0, H);
     room.addColorStop(0, "#241d3d"); room.addColorStop(1, "#120e20");
     ctx.fillStyle = room; ctx.fillRect(0, 0, W, H);
-    const pool = ctx.createRadialGradient(cx, cy - 10, 10, cx, cy, 90);
+    const midY = (G.rimY + G.floorY) / 2;
+    const pool = ctx.createRadialGradient(G.cx, midY - 10, 10, G.cx, midY, 90);
     pool.addColorStop(0, "rgba(120,110,190,0.18)"); pool.addColorStop(1, "rgba(120,110,190,0)");
     ctx.fillStyle = pool; ctx.fillRect(0, 0, W, H);
     // table: wood with a lit front edge
-    const tableY = cy + r - 2;
+    const tableY = G.tableY;
     const wood = ctx.createLinearGradient(0, tableY, 0, H);
     wood.addColorStop(0, "#5a3f3a"); wood.addColorStop(0.15, "#3f2c2a"); wood.addColorStop(1, "#2a1c1c");
     ctx.fillStyle = wood; ctx.fillRect(0, tableY, W, H - tableY);
     ctx.fillStyle = "rgba(255,220,200,0.18)"; ctx.fillRect(0, tableY, W, 0.8);
-    // bowl shadow on the table
+    // tank shadow on the table
     ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.beginPath(); ctx.ellipse(cx, tableY + 2.5, r * 0.85, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(G.cx, tableY + 2.5, G.halfW(G.sandY) * 0.95, 3, 0, 0, Math.PI * 2); ctx.fill();
 
     // ---- inside the glass ----
+    const airColor = "#2d2749";
     ctx.save();
-    this.circle(r - 1.5); ctx.clip();
+    G.clipInterior(ctx);
     // air
-    const air = ctx.createLinearGradient(0, BOWL.rimY, 0, BOWL.waterY);
-    air.addColorStop(0, "#2d2749"); air.addColorStop(1, "#231e3a");
-    ctx.fillStyle = air; ctx.fillRect(0, 0, W, BOWL.waterY);
+    const air = ctx.createLinearGradient(0, G.rimY, 0, G.waterY);
+    air.addColorStop(0, airColor); air.addColorStop(1, "#231e3a");
+    ctx.fillStyle = air; ctx.fillRect(0, 0, W, G.waterY);
     // water: depth gradient, tinted by dirt
-    const wg = ctx.createLinearGradient(0, BOWL.waterY, 0, BOWL.sandY);
+    const wg = ctx.createLinearGradient(0, G.waterY, 0, G.sandY);
     const c = (depth: number) => `rgb(${Math.round(40 + 40 * dirt + depth * 10)},${Math.round(125 - depth * 30 + 40 * dirt)},${Math.round(205 - depth * 60 - 110 * dirt)})`;
     wg.addColorStop(0, c(0)); wg.addColorStop(1, c(1));
-    ctx.fillStyle = wg; ctx.fillRect(0, BOWL.waterY, W, BOWL.sandY - BOWL.waterY);
+    ctx.fillStyle = wg; ctx.fillRect(0, G.waterY, W, G.sandY - G.waterY);
     // caustic light bands drifting through the water
     ctx.globalAlpha = 0.09 * (1 - dirt * 0.7);
     ctx.fillStyle = "#dff6ff";
     for (let i = 0; i < 3; i++) {
-      const x = cx + Math.sin(this.t * 0.35 + i * 2.1) * 30 + (i - 1) * 22;
-      ctx.beginPath(); ctx.ellipse(x, BOWL.waterY + 30 + i * 8, 7 + i * 2, 34, 0.35, 0, Math.PI * 2); ctx.fill();
+      const x = G.cx + Math.sin(this.t * 0.35 + i * 2.1) * 30 + (i - 1) * 22;
+      ctx.beginPath(); ctx.ellipse(x, G.waterY + 30 + i * 8, 7 + i * 2, 34, 0.35, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
     // sand
-    const sg = ctx.createLinearGradient(0, BOWL.sandY, 0, cy + r);
+    const sg = ctx.createLinearGradient(0, G.sandY, 0, G.floorY);
     sg.addColorStop(0, "#e2c48a"); sg.addColorStop(0.4, "#d2ac6c"); sg.addColorStop(1, "#a87c48");
-    ctx.fillStyle = sg; ctx.fillRect(0, BOWL.sandY, W, cy + r - BOWL.sandY);
-    ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(0, BOWL.sandY, W, 0.7);
+    ctx.fillStyle = sg; ctx.fillRect(0, G.sandY, W, G.floorY - G.sandY);
+    ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(0, G.sandY, W, 0.7);
     for (const g of this.gravel) {
       ctx.fillStyle = g.c; ctx.beginPath(); ctx.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.beginPath(); ctx.ellipse(g.x - g.rx * 0.3, g.y - g.ry * 0.35, g.rx * 0.4, g.ry * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     }
     // water surface: a gentle wave with a bright meniscus
     ctx.beginPath();
-    ctx.moveTo(0, BOWL.waterY);
-    for (let x = 0; x <= W; x += 2) ctx.lineTo(x, BOWL.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45);
-    ctx.lineTo(W, BOWL.waterY - 4); ctx.lineTo(0, BOWL.waterY - 4); ctx.closePath();
+    ctx.moveTo(0, G.waterY);
+    for (let x = 0; x <= W; x += 2) ctx.lineTo(x, G.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45);
+    ctx.lineTo(W, G.waterY - 4); ctx.lineTo(0, G.waterY - 4); ctx.closePath();
     ctx.fillStyle = air; ctx.fill();
     ctx.strokeStyle = "rgba(220,245,255,0.85)"; ctx.lineWidth = 0.7;
     ctx.beginPath();
-    for (let x = 0; x <= W; x += 2) { const y = BOWL.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    for (let x = 0; x <= W; x += 2) { const y = G.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     ctx.stroke();
     ctx.fillStyle = "rgba(255,255,255,0.35)";
-    for (let i = 0; i < 4; i++) { const x = cx - 40 + ((i * 23 + this.t * 6) % 80); ctx.beginPath(); ctx.ellipse(x, BOWL.waterY + 1.2, 2.5, 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
+    for (let i = 0; i < 4; i++) { const x = G.cx - 40 + ((i * 23 + this.t * 6) % 80); ctx.beginPath(); ctx.ellipse(x, G.waterY + 1.2, 2.5, 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
 
     // plants (behind)
-    this.plant(45, BOWL.sandY, 22, "#2f8f4f", "#5cc47a", 0);
-    this.plant(114, BOWL.sandY, 24, "#2a7a45", "#4fb56b", 1.3);
+    this.plant(45, G.sandY, 22, "#2f8f4f", "#5cc47a", 0);
+    this.plant(114, G.sandY, 24, "#2a7a45", "#4fb56b", 1.3);
+    if (G.shape === "square") { this.plant(24, G.sandY, 18, "#2a7a45", "#5cc47a", 0.7); this.plant(136, G.sandY, 20, "#2f8f4f", "#4fb56b", 1.9); }
 
     if (this.atlas) {
       const atlas = this.atlas;
@@ -423,7 +430,7 @@ export class FishEngine {
       ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.arc(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.3, 0, Math.PI * 2); ctx.fill();
     }
     // front plant
-    this.plant(104, BOWL.sandY + 3, 12, "#3a9c58", "#7ee39a", 2.1);
+    this.plant(104, G.sandY + 3, 12, "#3a9c58", "#7ee39a", 2.1);
 
     // dirt specks (only when quite dirty)
     if (dirt > 0.6) {
@@ -441,36 +448,12 @@ export class FishEngine {
     }
     if (this.cleanFlash > 0) {
       ctx.fillStyle = `rgba(230,255,255,${(this.cleanFlash * 0.35).toFixed(3)})`;
-      ctx.fillRect(0, BOWL.waterY, W, BOWL.sandY - BOWL.waterY);
+      ctx.fillRect(0, G.waterY, W, G.sandY - G.waterY);
     }
     ctx.restore();
 
     // ---- the glass ----
-    // inner shading: darker toward the right edge, brighter at the left (refraction)
-    ctx.save();
-    this.circle(r - 1.5); ctx.clip();
-    const shade = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.3, r * 0.2, cx, cy, r);
-    shade.addColorStop(0, "rgba(255,255,255,0.06)"); shade.addColorStop(0.75, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(0,0,30,0.28)");
-    ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
-    ctx.restore();
-    // wall: a ring with a light gradient
-    const wall = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    wall.addColorStop(0, "#e9f7ff"); wall.addColorStop(0.5, "#a9d8ea"); wall.addColorStop(1, "#7fb6cc");
-    ctx.strokeStyle = wall; ctx.lineWidth = 2.2;
-    this.circle(r - 0.4); ctx.stroke();
-    // rim (the lip of the bowl)
-    const rimHw = halfW(BOWL.rimY) + 2;
-    ctx.fillStyle = "#eaf8ff";
-    ctx.beginPath(); ctx.ellipse(cx, BOWL.rimY - 0.5, rimHw, 2.2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#2d2749";
-    ctx.beginPath(); ctx.ellipse(cx, BOWL.rimY - 0.5, rimHw - 2.2, 1.1, 0, 0, Math.PI * 2); ctx.fill();
-    // highlights
-    ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 2.4; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.arc(cx, cy, r - 5, Math.PI * 1.08, Math.PI * 1.42); ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(cx, cy, r - 5, Math.PI * 1.5, Math.PI * 1.62); ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(cx, cy, r - 4, Math.PI * 0.12, Math.PI * 0.42); ctx.stroke();
+    G.drawGlass(ctx, airColor);
   }
 
   private plant(x: number, baseY: number, h: number, dark: string, light: string, phase: number) {

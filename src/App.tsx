@@ -11,14 +11,14 @@ import { useFishGame } from "./game/useFishGame";
 import type { ActionName } from "./game/types";
 
 export default function App() {
-  const { state, now, mood, act, setTimeFormat, setFishName, setStructure, changeSpecies, reset } = useFishGame();
+  const { state, now, mood, act, setTimeFormat, setFishName, setStructure, setTank, changeSpecies, reset } = useFishGame();
   const [renaming, setRenaming] = useState(false);
   const canvasRef = useRef<FishCanvasHandle>(null);
   const species = speciesInfo(state.species);
 
   const inputs = useMemo(
-    () => ({ mood, cleanliness: state.cleanliness, happiness: state.happiness, timeFormat: state.timeFormat, structure: state.structure, species: state.species }),
-    [mood, state.cleanliness, state.happiness, state.timeFormat, state.structure, state.species],
+    () => ({ mood, cleanliness: state.cleanliness, happiness: state.happiness, timeFormat: state.timeFormat, structure: state.structure, species: state.species, tank: state.tank }),
+    [mood, state.cleanliness, state.happiness, state.timeFormat, state.structure, state.species, state.tank],
   );
 
   const onAct = (a: ActionName) => {
@@ -37,7 +37,7 @@ export default function App() {
           <StatsPanel state={state} mood={mood} />
           <SidePanel tabs={{
             care: <ActionsPanel state={state} now={now} onAct={onAct} />,
-            tank: <TankPanel structure={state.structure} species={state.species} onStructure={setStructure} onSpecies={changeSpecies} />,
+            tank: <TankPanel structure={state.structure} species={state.species} tank={state.tank} onStructure={setStructure} onSpecies={changeSpecies} onTank={setTank} />,
             settings: <SettingsPanel timeFormat={state.timeFormat} now={now} onTimeFormat={setTimeFormat} onReset={reset} onRename={() => setRenaming(true)} />,
           }} />
         </aside>

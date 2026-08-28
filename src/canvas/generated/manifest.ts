@@ -19,5 +19,5 @@ export const STRUCTURE_SPRITES = {
   parthenon: { x: 38, y: 72, w: 84, h: 52, sy: 324 },
   stonehenge: { x: 34, y: 74, w: 92, h: 50, sy: 376 },
   pineapple: { x: 54, y: 50, w: 52, h: 74, sy: 426 },
-  dallasCityHall: { x: 38, y: 46, w: 88, h: 78, sy: 500 },
+  dallasCityHall: { x: 38, y: 46, w: 84, h: 78, sy: 500 },
 } as const;
