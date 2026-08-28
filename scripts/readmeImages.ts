@@ -6,13 +6,15 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..");
 const tmp = join(root, "node_modules/.tmp/readme");
 execFileSync("mkdir", ["-p", tmp]);
-const snap = (name: string, structure: string, species: string, mood = "content", tank = "bowl") => {
+const snap = (name: string, structure: string, species: string, mood = "content", tank = "bowl", when = "") => {
   const out = join(tmp, `${name}.png`);
-  execFileSync("bun", [join(root, "scripts/snapshot.ts"), out, mood, "100", "12h", "5", structure, species, tank], { stdio: "ignore" });
+  execFileSync("bun", [join(root, "scripts/snapshot.ts"), out, mood, "100", "12h", "5", structure, species, tank, ...(when ? [when] : [])], { stdio: "ignore" });
   return out;
 };
 execFileSync("cp", [snap("hero", "castle", "goldfish"), join(root, "docs/img/goldfish-bowl.png")]);
 execFileSync("cp", [snap("square", "bigBen", "whiteCloud", "content", "square"), join(root, "docs/img/square-tank.png")]);
+// the skyline after dark: 11 pm Dallas time (04:00Z next day) on a fixed date so the render is reproducible
+execFileSync("cp", [snap("skyline", "dallasSkyline", "whiteCloud", "content", "square", "2026-08-29T04:00:00Z"), join(root, "docs/img/skyline-night.png")]);
 const tiles = [["reunionTower", "endler"], ["eiffelTower", "betta"], ["bigBen", "whiteCloud"], ["parthenon", "scarletBadis"], ["stonehenge", "peaPuffer"], ["pineapple", "chiliRasbora"]];
 const c = createCanvas(320 * 3, 288 * 2);
 const ctx = c.getContext("2d");
@@ -22,4 +24,4 @@ for (let i = 0; i < tiles.length; i++) {
   ctx.drawImage(img, (i % 3) * 320, Math.floor(i / 3) * 288, 320, 288);
 }
 writeFileSync(join(root, "docs/img/structures-and-fish.png"), c.toBuffer("image/png"));
-console.log("wrote docs/img/goldfish-bowl.png, square-tank.png and structures-and-fish.png");
+console.log("wrote docs/img/goldfish-bowl.png, square-tank.png, skyline-night.png and structures-and-fish.png");
