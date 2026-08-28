@@ -6,7 +6,13 @@
  */
 import { type Atlas, PX, STRUCTURE } from "./atlas";
 import { type Box, CLOCK_H, CLOCK_W, disc, drawClockPanel, drawMeridiemPip, rect } from "./clock";
+import { drawOmniDisplay, type OmniLive } from "./omni";
 import type { StructureId, TimeFormat } from "../game/types";
+import type { Weather } from "../game/omni";
+
+/** What changes frame to frame and isn't in the sprite: the clock, night, the Omni's message + weather. */
+export interface Live { t: number; night: boolean; omniMessage: string; weather: Weather | null }
+export const DEFAULT_LIVE: Live = { t: 0, night: false, omniMessage: "", weather: null };
 
 export interface Structure {
   id: StructureId;
@@ -21,7 +27,7 @@ export interface Structure {
   /** Colour of the panel's outer frame, matched to the structure's material. */
   edge: string;
   /** Live details drawn over the sprite before the clock. */
-  extras?(ctx: CanvasRenderingContext2D, now: Date, fmt: TimeFormat): void;
+  extras?(ctx: CanvasRenderingContext2D, now: Date, fmt: TimeFormat, live: Live): void;
   /** Which baked night frame to show (for landmarks with night frames); `t` = scene seconds. */
   nightFrame?(now: Date, t: number): number;
 }
@@ -76,6 +82,14 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
     clock: clockBox(106), pip: [110, 40], edge: "#9a9dab",
     nightFrame: (_now, t) => Math.floor(t * 0.7) % 2, // windows twinkle between two lit patterns
   }),
+  omniHotel: def("omniHotel", {
+    clock: clockBox(106), pip: [110, 52], edge: "#8d93a4",
+    // the LED facade: scene 60..100 × 64..100
+    extras(ctx, now, fmt, live) {
+      const omni: OmniLive = { now, fmt, t: live.t, night: live.night, message: live.omniMessage, weather: live.weather };
+      drawOmniDisplay(ctx, { x: 60, y: 64, w: 40, h: 36 }, omni);
+    },
+  }),
 };
 
 /**
@@ -83,7 +97,7 @@ export const STRUCTURE_REGISTRY: Record<StructureId, Structure> = {
  * At night a landmark with baked night frames shows one (chosen by its `nightFrame`); any other
  * landmark is drawn from the night-tinted sheet when the atlas carries one.
  */
-export function drawStructure(ctx: CanvasRenderingContext2D, atlas: Atlas, id: StructureId, now: Date, fmt: TimeFormat, bg = "#1c1730", night = false, t = 0): void {
+export function drawStructure(ctx: CanvasRenderingContext2D, atlas: Atlas, id: StructureId, now: Date, fmt: TimeFormat, bg = "#1c1730", night = false, t = 0, live: Live = DEFAULT_LIVE): void {
   const s = STRUCTURE[id];
   const st = STRUCTURE_REGISTRY[id];
   if (night && s.night?.length) {
@@ -92,7 +106,7 @@ export function drawStructure(ctx: CanvasRenderingContext2D, atlas: Atlas, id: S
   } else {
     ctx.drawImage(night && atlas.structuresNight ? atlas.structuresNight : atlas.structures, 0, s.sy * PX, s.w * PX, s.h * PX, s.x, s.y, s.w, s.h);
   }
-  st.extras?.(ctx, now, fmt);
+  st.extras?.(ctx, now, fmt, { ...live, t, night });
   const meridiem = drawClockPanel(ctx, st.clock, now, fmt, st.edge);
   drawMeridiemPip(ctx, st.pip[0], st.pip[1], meridiem, bg);
 }

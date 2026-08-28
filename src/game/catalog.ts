@@ -13,6 +13,7 @@ export const STRUCTURES: CatalogEntry<StructureId>[] = [
   { id: "pineapple", label: "Pineapple", emoji: "🍍", blurb: "Who lives in one under the sea?" },
   { id: "dallasCityHall", label: "Dallas City Hall", emoji: "🏢", blurb: "Pei's inverted pyramid" },
   { id: "dallasSkyline", label: "Dallas Skyline", emoji: "🌆", blurb: "Reunion to the Omni — swim between the towers; lights up at night" },
+  { id: "omniHotel", label: "Omni Hotel", emoji: "🏨", blurb: "Its LED facade talks: graphics, your message, the time, the weather" },
 ];
 
 export const SPECIES: CatalogEntry<SpeciesId>[] = [

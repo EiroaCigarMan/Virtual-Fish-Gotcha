@@ -1,12 +1,13 @@
 import { ACTION_COOLDOWN_MS, ACTION_EFFECTS, DECAY_PER_HOUR } from "./constants";
 import { DEFAULT_SPECIES, DEFAULT_STRUCTURE, DEFAULT_TANK } from "./catalog";
+import { sanitizeOmniMessage } from "./omni";
 import type { ActionName, GameState, SpeciesId, StatName, StructureId, TankShape, TimeFormat } from "./types";
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
 
 export function defaultState(now = Date.now()): GameState {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     hunger: 80,
     happiness: 75,
     cleanliness: 85,
@@ -18,6 +19,7 @@ export function defaultState(now = Date.now()): GameState {
     structure: DEFAULT_STRUCTURE,
     species: DEFAULT_SPECIES,
     tank: DEFAULT_TANK,
+    omniMessage: "",
   };
 }
 
@@ -71,6 +73,12 @@ export function setStructure(state: GameState, structure: StructureId): GameStat
   return { ...state, structure, tank };
 }
 
+/** Pure: set what the Omni's facade scrolls (sanitised to what it can letter). Same text → same object. */
+export function setOmniMessage(state: GameState, raw: string): GameState {
+  const omniMessage = sanitizeOmniMessage(raw);
+  return state.omniMessage === omniMessage ? state : { ...state, omniMessage };
+}
+
 /** Pure: swap the tank shape. Cosmetic — nothing else changes. */
 export function setTank(state: GameState, tank: TankShape): GameState {
   return state.tank === tank ? state : { ...state, tank };
@@ -82,5 +90,5 @@ export function setTank(state: GameState, tank: TankShape): GameState {
  */
 export function newFish(state: GameState, species: SpeciesId, now = Date.now()): GameState {
   if (state.species === species) return state;
-  return { ...defaultState(now), structure: state.structure, tank: state.tank, timeFormat: state.timeFormat, species };
+  return { ...defaultState(now), structure: state.structure, tank: state.tank, timeFormat: state.timeFormat, omniMessage: state.omniMessage, species };
 }

@@ -31,7 +31,9 @@ const FISH_MODELS: Record<string, FishModel> = {};
 const STRUCTURE_MODELS: Record<string, StructureModel> = {};
 if (fileArg) {
   const mod = (await import(join(process.cwd(), fileArg))) as Record<string, FishModel | StructureModel>;
-  const [name, model] = Object.entries(mod)[0];
+  const entry = Object.entries(mod).find(([, v]) => v && typeof (v as { build?: unknown }).build === "function");
+  if (!entry) throw new Error(`${fileArg} exports no model (an object with build())`);
+  const [name, model] = entry;
   if ("frames" in model) FISH_MODELS[name] = model; else STRUCTURE_MODELS[name] = model;
 } else {
   Object.assign(FISH_MODELS, REGISTERED_FISH);

@@ -85,3 +85,7 @@ body {
 .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pick-icon { font-size: 16px; }
 .row.confirm { margin-top: 10px; padding: 8px; border: 2px solid var(--low); border-radius: 3px; line-height: 1.5; }
+
+/* text input in a panel row (the Omni's message) */
+.text { font: inherit; font-size: 9px; background: #0e1422; color: var(--fg, #e6eef6); border: 2px solid var(--panel-edge); border-radius: 3px; padding: 6px 8px; min-width: 0; width: 150px; letter-spacing: .04em; text-transform: uppercase; }
+.text:focus { outline: 2px solid #7ef9a2; outline-offset: 1px; }

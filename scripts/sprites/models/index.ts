@@ -15,7 +15,8 @@ import { stonehenge } from "./structures/stonehenge";
 import { pineapple } from "./structures/pineapple";
 import { dallasCityHall } from "./structures/dallasCityHall";
 import { dallasSkyline } from "./structures/dallasSkyline";
+import { omniHotel } from "./structures/omniHotel";
 
 /** Keys are the game's SpeciesId / StructureId; the runtime manifest is typed against them, so a missing model fails the type-check. */
 export const FISH_MODELS: Record<string, FishModel> = { goldfish, betta, endler, chiliRasbora, scarletBadis, peaPuffer, whiteCloud };
-export const STRUCTURE_MODELS: Record<string, StructureModel> = { castle, reunionTower, eiffelTower, bigBen, parthenon, stonehenge, pineapple, dallasCityHall, dallasSkyline };
+export const STRUCTURE_MODELS: Record<string, StructureModel> = { castle, reunionTower, eiffelTower, bigBen, parthenon, stonehenge, pineapple, dallasCityHall, dallasSkyline, omniHotel };

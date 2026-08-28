@@ -10,6 +10,10 @@ export function SettingsPanel({ timeFormat, now, onTimeFormat, onReset, onRename
   const clock = formatClock(new Date(now), timeFormat);
   return (
     <>
+      <div className="row muted">
+        <span>Created by</span>
+        <span>Johann Ortega</span>
+      </div>
       <div className="row">
         <span>Clock</span>
         <div className="seg" role="radiogroup" aria-label="Time format">
