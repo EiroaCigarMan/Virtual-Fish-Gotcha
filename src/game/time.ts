@@ -14,3 +14,11 @@ export function formatClock(date: Date, fmt: TimeFormat): ClockParts {
   const h12 = h24 % 12 || 12;
   return { display: `${h12}:${mm}`, meridiem: h24 < 12 ? "AM" : "PM" };
 }
+
+/** "08/28/26" — the small date row under the clock. */
+export function formatDateMMDDYY(date: Date): string {
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const yy = String(date.getFullYear() % 100).padStart(2, "0");
+  return `${mm}/${dd}/${yy}`;
+}

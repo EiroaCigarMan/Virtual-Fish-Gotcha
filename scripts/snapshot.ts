@@ -4,17 +4,19 @@
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { writeFileSync } from "node:fs";
-import { FishEngine, H, W } from "../src/canvas/engine";
+import { FishEngine, H, PX, W } from "../src/canvas/engine";
+import { loadAtlas } from "../src/canvas/atlas";
 import { isSpeciesId, isStructureId } from "../src/game/catalog";
 import type { FishMood, TimeFormat } from "../src/game/types";
+import { nodePlatform, publicBase } from "./lib/nodePlatform";
 
 const [out = "snapshot.png", mood = "content", clean = "100", fmt = "12h", secs = "3", structure = "castle", species = "goldfish"] = process.argv.slice(2);
 if (!isStructureId(structure)) throw new Error(`unknown structure: ${structure}`);
 if (!isSpeciesId(species)) throw new Error(`unknown species: ${species}`);
-const SCALE = 4;
-const canvas = createCanvas(W, H);
+const canvas = createCanvas(W * PX, H * PX);
 // FishEngine only needs width/height/getContext — the napi canvas satisfies that.
-const engine = new FishEngine(canvas as unknown as HTMLCanvasElement);
+const engine = new FishEngine(canvas as unknown as HTMLCanvasElement, nodePlatform);
+engine.setAtlas(await loadAtlas(nodePlatform, publicBase));
 engine.setInputs({ mood: mood as FishMood, cleanliness: Number(clean), happiness: 80, timeFormat: fmt as TimeFormat, structure, species });
 // Drive the private loop manually with fixed steps.
 type Priv = { update(dt: number): void; render(): void; feed(): void };
@@ -23,10 +25,5 @@ p.feed();
 const steps = Math.round(Number(secs) / (1 / 60));
 for (let i = 0; i < steps; i++) p.update(1 / 60);
 p.render();
-// Upscale with nearest-neighbour so the PNG shows what the browser shows.
-const big = createCanvas(W * SCALE, H * SCALE);
-const bctx = big.getContext("2d");
-bctx.imageSmoothingEnabled = false;
-bctx.drawImage(canvas, 0, 0, W * SCALE, H * SCALE);
-writeFileSync(out, big.toBuffer("image/png"));
-console.log(`wrote ${out} (${W * SCALE}x${H * SCALE}) mood=${mood} clean=${clean} fmt=${fmt} structure=${structure} species=${species}`);
+writeFileSync(out, canvas.toBuffer("image/png"));
+console.log(`wrote ${out} (${W * PX}x${H * PX}) mood=${mood} clean=${clean} fmt=${fmt} structure=${structure} species=${species}`);
