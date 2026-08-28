@@ -1,13 +1,18 @@
-import { STRUCTURE_REGISTRY } from "./structures";
-import { SPECIES_SPRITES, drawSprite, moodPalette, spriteHeight, spriteWidth } from "./sprites";
+import { type Atlas, FISH, PX } from "./atlas";
+import { FishPainter } from "./fish";
+import { browserPlatform, type Platform } from "./platform";
+import { STRUCTURE_REGISTRY, drawStructure } from "./structures";
 import { SPECIES_FLAVOR } from "../game/catalog";
 import type { FishMood, SpeciesId, StructureId, TimeFormat } from "../game/types";
 
+/** Logical scene size. Everything below reasons in these units; the canvas is PX× bigger. */
 export const W = 160;
 export const H = 144;
+export { PX };
 
-/** Bowl geometry (internal px). */
+/** Bowl geometry (logical px). */
 const BOWL = { cx: 80, cy: 78, r: 62, rimY: 24, waterY: 36, sandY: 124 };
+const ROOM = "#1c1730";
 
 type Layer = "behind" | "front";
 
@@ -52,13 +57,16 @@ function mulberry32(a: number) {
 function halfW(y: number, r = BOWL.r): number {
   const dy = y - BOWL.cy;
   const v = r * r - dy * dy;
-  return v <= 0 ? 0 : Math.floor(Math.sqrt(v));
+  return v <= 0 ? 0 : Math.sqrt(v);
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 export class FishEngine {
   private ctx: CanvasRenderingContext2D;
+  private platform: Platform;
+  private atlas: Atlas | null = null;
+  private painter: FishPainter;
   private raf = 0;
   private last = 0;
   private t = 0; // seconds since start
@@ -70,31 +78,39 @@ export class FishEngine {
   private pellets: Pellet[] = [];
   private particles: Particle[] = [];
   private nextBubble = 1;
-  private gravel: { x: number; y: number; c: string }[] = [];
+  private gravel: { x: number; y: number; rx: number; ry: number; c: string }[] = [];
   private dirtSpecks: { x: number; y: number; ph: number }[] = [];
   private cleanFlash = 0;
-  /** 1 = a painted structure pixel. Built per structure; what "overlaps the structure" really means. */
+  /** 1 = a painted structure pixel (logical grid). Built per structure from the baked sprite. */
   private mask = new Uint8Array(W * H);
   private maskFor: StructureId | null = null;
+  private scratch: HTMLCanvasElement | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
-    canvas.width = W; canvas.height = H;
+  constructor(canvas: HTMLCanvasElement, platform: Platform = browserPlatform) {
+    canvas.width = W * PX; canvas.height = H * PX;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2d context unavailable");
-    ctx.imageSmoothingEnabled = false;
     this.ctx = ctx;
+    this.platform = platform;
+    this.painter = new FishPainter(platform);
     this.spawnSchool(this.inputs.species);
     const rnd = mulberry32(1337);
-    for (let i = 0; i < 90; i++) {
-      const y = BOWL.sandY + 1 + Math.floor(rnd() * (BOWL.cy + BOWL.r - BOWL.sandY - 3));
-      const hw = halfW(y) - 2;
+    for (let i = 0; i < 70; i++) {
+      const y = BOWL.sandY + 1.5 + rnd() * (BOWL.cy + BOWL.r - BOWL.sandY - 4);
+      const hw = halfW(y) - 3;
       if (hw <= 0) continue;
-      const x = BOWL.cx - hw + Math.floor(rnd() * hw * 2);
-      this.gravel.push({ x, y, c: ["#c9a46a", "#a67c4e", "#e0c085", "#8f6a45"][Math.floor(rnd() * 4)] });
+      const x = BOWL.cx - hw + rnd() * hw * 2;
+      this.gravel.push({ x, y, rx: 0.9 + rnd() * 0.9, ry: 0.6 + rnd() * 0.5, c: ["#c9a46a", "#a67c4e", "#e0c085", "#8f6a45", "#d9b98a"][Math.floor(rnd() * 5)] });
     }
     for (let i = 0; i < 40; i++) {
       this.dirtSpecks.push({ x: rnd() * W, y: BOWL.waterY + rnd() * (BOWL.sandY - BOWL.waterY), ph: rnd() * 6.28 });
     }
+  }
+
+  /** Sprite sheets arrive asynchronously; until then the bowl renders empty. */
+  setAtlas(atlas: Atlas) {
+    this.atlas = atlas;
+    this.maskFor = null;
   }
 
   setInputs(i: EngineInputs) {
@@ -104,13 +120,26 @@ export class FishEngine {
     if (this.maskFor !== i.structure) this.buildMask(i.structure);
   }
 
-  /** Render the structure alone and keep its alpha as an occupancy mask (the next frame overwrites the canvas anyway). */
+  /**
+   * Render the structure alone (offscreen, at full resolution) and keep a logical-resolution
+   * occupancy mask: a logical cell counts as painted if any of its PX×PX pixels is.
+   */
   private buildMask(id: StructureId) {
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, W, H);
-    STRUCTURE_REGISTRY[id].draw(ctx, new Date(), this.inputs.timeFormat);
-    const data = ctx.getImageData(0, 0, W, H).data;
-    for (let i = 0; i < W * H; i++) this.mask[i] = data[i * 4 + 3] > 0 ? 1 : 0;
+    if (!this.atlas) return;
+    if (!this.scratch) this.scratch = this.platform.createCanvas(W * PX, H * PX);
+    const ctx = this.scratch.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W * PX, H * PX);
+    ctx.setTransform(PX, 0, 0, PX, 0, 0);
+    drawStructure(ctx, this.atlas, id, new Date(), this.inputs.timeFormat);
+    const data = ctx.getImageData(0, 0, W * PX, H * PX).data;
+    this.mask.fill(0);
+    for (let py = 0; py < H * PX; py++) {
+      const ly = (py / PX) | 0;
+      for (let px = 0; px < W * PX; px++) {
+        if (data[(py * W * PX + px) * 4 + 3] > 40) this.mask[ly * W + ((px / PX) | 0)] = 1;
+      }
+    }
     this.maskFor = id;
   }
 
@@ -128,7 +157,7 @@ export class FishEngine {
     }
   }
 
-  private get sprite() { return SPECIES_SPRITES[this.inputs.species]; }
+  private get sprite() { return FISH[this.inputs.species]; }
 
   start() {
     this.last = performance.now();
@@ -168,10 +197,10 @@ export class FishEngine {
   }
 
   private spawnBubble(x: number, y: number) {
-    this.bubbles.push({ x, y, r: Math.random() < 0.3 ? 2 : 1, vy: rand(10, 18), wob: rand(0, 6.28) });
+    this.bubbles.push({ x, y, r: Math.random() < 0.3 ? 1.6 : 0.9, vy: rand(10, 18), wob: rand(0, 6.28) });
   }
 
-  // ---------- simulation ----------
+  // ---------- simulation (unchanged from the pixel engine) ----------
   private inWater(x: number, y: number, margin: number): boolean {
     if (y < BOWL.waterY + margin || y > BOWL.sandY - margin) return false;
     const hw = halfW(y) - margin;
@@ -189,8 +218,7 @@ export class FishEngine {
   /** True if any fish in the school sits over a painted structure pixel (so a layer flip never pops). */
   private overlapsStructure(): boolean {
     if (this.maskFor !== this.inputs.structure) this.buildMask(this.inputs.structure);
-    const fr = this.sprite.frames[0];
-    const fw = spriteWidth(fr), fh = spriteHeight(fr);
+    const [fw, fh] = this.sprite.hit;
     return this.fishes.some((f) => {
       const x0 = Math.max(0, Math.floor(f.x - fw / 2) - 1), x1 = Math.min(W - 1, Math.ceil(f.x + fw / 2) + 1);
       const y0 = Math.max(0, Math.floor(f.y - fh / 2) - 2), y1 = Math.min(H - 1, Math.ceil(f.y + fh / 2) + 2);
@@ -222,8 +250,7 @@ export class FishEngine {
       if (f.retargetIn <= 0 || arrived) {
         const clear = !this.overlapsStructure();
         const passages = STRUCTURE_REGISTRY[this.inputs.structure].passages;
-        const fr = this.sprite.frames[0];
-        const fw = spriteWidth(fr), fh = spriteHeight(fr);
+        const [fw, fh] = this.sprite.hit;
         // Open structures: about a third of the time, swim through an opening (always drawn behind
         // the structure so its edges frame the fish). Only when the school is clear or already behind, so it never pops.
         const allBehind = this.fishes.every((s) => s.layer === "behind");
@@ -301,69 +328,99 @@ export class FishEngine {
   }
 
   // ---------- rendering ----------
+  private circle(r = BOWL.r) {
+    this.ctx.beginPath();
+    this.ctx.arc(BOWL.cx, BOWL.cy, r, 0, Math.PI * 2);
+  }
+
   private render() {
     const ctx = this.ctx;
+    const { cx, cy, r } = BOWL;
     const dirt = 1 - this.inputs.cleanliness / 100; // 0 clean … 1 filthy
-    // room background
-    ctx.fillStyle = "#1c1730";
-    ctx.fillRect(0, 0, W, H);
-    // table
-    ctx.fillStyle = "#3b2a2a"; ctx.fillRect(0, BOWL.cy + BOWL.r - 2, W, H);
-    ctx.fillStyle = "#4e3838"; ctx.fillRect(0, BOWL.cy + BOWL.r - 2, W, 2);
+    ctx.setTransform(PX, 0, 0, PX, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
-    // glass back (slightly lighter than room) + water + sand, row by row for crisp circle
-    for (let y = BOWL.rimY; y <= BOWL.cy + BOWL.r; y++) {
-      const hw = halfW(y);
-      if (hw <= 0) continue;
-      const x0 = BOWL.cx - hw, wdt = hw * 2 + 1;
-      // glass wall (2px) + interior
-      ctx.fillStyle = "#c8ecf7"; ctx.fillRect(x0, y, wdt, 1);
-      const inner = hw - 2;
-      if (inner > 0) {
-        let col: string;
-        if (y < BOWL.waterY) col = "#2a2542"; // air inside bowl
-        else if (y >= BOWL.sandY) col = "#d8b374"; // sand
-        else {
-          // water gradient by depth, tinted by dirt
-          const depth = (y - BOWL.waterY) / (BOWL.sandY - BOWL.waterY);
-          const r = Math.round(40 + 40 * dirt + depth * 10);
-          const g = Math.round(120 - depth * 30 + 40 * dirt);
-          const b = Math.round(200 - depth * 60 - 110 * dirt);
-          col = `rgb(${r},${g},${b})`;
-        }
-        ctx.fillStyle = col; ctx.fillRect(BOWL.cx - inner, y, inner * 2 + 1, 1);
-      }
+    // room: a dim vertical gradient with a soft pool of light behind the bowl
+    const room = ctx.createLinearGradient(0, 0, 0, H);
+    room.addColorStop(0, "#241d3d"); room.addColorStop(1, "#120e20");
+    ctx.fillStyle = room; ctx.fillRect(0, 0, W, H);
+    const pool = ctx.createRadialGradient(cx, cy - 10, 10, cx, cy, 90);
+    pool.addColorStop(0, "rgba(120,110,190,0.18)"); pool.addColorStop(1, "rgba(120,110,190,0)");
+    ctx.fillStyle = pool; ctx.fillRect(0, 0, W, H);
+    // table: wood with a lit front edge
+    const tableY = cy + r - 2;
+    const wood = ctx.createLinearGradient(0, tableY, 0, H);
+    wood.addColorStop(0, "#5a3f3a"); wood.addColorStop(0.15, "#3f2c2a"); wood.addColorStop(1, "#2a1c1c");
+    ctx.fillStyle = wood; ctx.fillRect(0, tableY, W, H - tableY);
+    ctx.fillStyle = "rgba(255,220,200,0.18)"; ctx.fillRect(0, tableY, W, 0.8);
+    // bowl shadow on the table
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath(); ctx.ellipse(cx, tableY + 2.5, r * 0.85, 3, 0, 0, Math.PI * 2); ctx.fill();
+
+    // ---- inside the glass ----
+    ctx.save();
+    this.circle(r - 1.5); ctx.clip();
+    // air
+    const air = ctx.createLinearGradient(0, BOWL.rimY, 0, BOWL.waterY);
+    air.addColorStop(0, "#2d2749"); air.addColorStop(1, "#231e3a");
+    ctx.fillStyle = air; ctx.fillRect(0, 0, W, BOWL.waterY);
+    // water: depth gradient, tinted by dirt
+    const wg = ctx.createLinearGradient(0, BOWL.waterY, 0, BOWL.sandY);
+    const c = (depth: number) => `rgb(${Math.round(40 + 40 * dirt + depth * 10)},${Math.round(125 - depth * 30 + 40 * dirt)},${Math.round(205 - depth * 60 - 110 * dirt)})`;
+    wg.addColorStop(0, c(0)); wg.addColorStop(1, c(1));
+    ctx.fillStyle = wg; ctx.fillRect(0, BOWL.waterY, W, BOWL.sandY - BOWL.waterY);
+    // caustic light bands drifting through the water
+    ctx.globalAlpha = 0.09 * (1 - dirt * 0.7);
+    ctx.fillStyle = "#dff6ff";
+    for (let i = 0; i < 3; i++) {
+      const x = cx + Math.sin(this.t * 0.35 + i * 2.1) * 30 + (i - 1) * 22;
+      ctx.beginPath(); ctx.ellipse(x, BOWL.waterY + 30 + i * 8, 7 + i * 2, 34, 0.35, 0, Math.PI * 2); ctx.fill();
     }
-    // rim
-    { const hw = halfW(BOWL.rimY); ctx.fillStyle = "#e8f8ff"; ctx.fillRect(BOWL.cx - hw - 2, BOWL.rimY - 2, hw * 2 + 5, 2);
-      ctx.fillStyle = "#9fd3e6"; ctx.fillRect(BOWL.cx - hw - 2, BOWL.rimY, hw * 2 + 5, 1); }
-    // water surface line + shimmer
-    { const hw = halfW(BOWL.waterY) - 2; ctx.fillStyle = "#bfefff"; ctx.fillRect(BOWL.cx - hw, BOWL.waterY, hw * 2 + 1, 1);
-      ctx.fillStyle = "#e6fbff";
-      for (let i = 0; i < 5; i++) { const x = BOWL.cx - hw + 6 + ((i * 17 + Math.floor(this.t * 6)) % (hw * 2 - 10)); ctx.fillRect(x, BOWL.waterY, 3, 1); } }
-    // gravel
-    for (const g of this.gravel) { ctx.fillStyle = g.c; ctx.fillRect(g.x, g.y, 1, 1); }
+    ctx.globalAlpha = 1;
+    // sand
+    const sg = ctx.createLinearGradient(0, BOWL.sandY, 0, cy + r);
+    sg.addColorStop(0, "#e2c48a"); sg.addColorStop(0.4, "#d2ac6c"); sg.addColorStop(1, "#a87c48");
+    ctx.fillStyle = sg; ctx.fillRect(0, BOWL.sandY, W, cy + r - BOWL.sandY);
+    ctx.fillStyle = "rgba(255,240,200,0.5)"; ctx.fillRect(0, BOWL.sandY, W, 0.7);
+    for (const g of this.gravel) {
+      ctx.fillStyle = g.c; ctx.beginPath(); ctx.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.beginPath(); ctx.ellipse(g.x - g.rx * 0.3, g.y - g.ry * 0.35, g.rx * 0.4, g.ry * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // water surface: a gentle wave with a bright meniscus
+    ctx.beginPath();
+    ctx.moveTo(0, BOWL.waterY);
+    for (let x = 0; x <= W; x += 2) ctx.lineTo(x, BOWL.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45);
+    ctx.lineTo(W, BOWL.waterY - 4); ctx.lineTo(0, BOWL.waterY - 4); ctx.closePath();
+    ctx.fillStyle = air; ctx.fill();
+    ctx.strokeStyle = "rgba(220,245,255,0.85)"; ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 2) { const y = BOWL.waterY + Math.sin(x * 0.18 + this.t * 2.2) * 0.45; if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    for (let i = 0; i < 4; i++) { const x = cx - 40 + ((i * 23 + this.t * 6) % 80); ctx.beginPath(); ctx.ellipse(x, BOWL.waterY + 1.2, 2.5, 0.5, 0, 0, Math.PI * 2); ctx.fill(); }
 
     // plants (behind)
     this.plant(45, BOWL.sandY, 22, "#2f8f4f", "#5cc47a", 0);
     this.plant(114, BOWL.sandY, 24, "#2a7a45", "#4fb56b", 1.3);
 
-    // fish behind the structure
-    for (const s of this.fishes) if (s.layer === "behind") this.drawFish(s);
-    // structure + clock
-    STRUCTURE_REGISTRY[this.inputs.structure].draw(ctx, new Date(), this.inputs.timeFormat);
-    // fish in front
-    for (const s of this.fishes) if (s.layer === "front") this.drawFish(s);
+    if (this.atlas) {
+      const atlas = this.atlas;
+      for (const s of this.fishes) if (s.layer === "behind") this.drawFish(atlas, s);
+      drawStructure(ctx, atlas, this.inputs.structure, new Date(), this.inputs.timeFormat, ROOM);
+      for (const s of this.fishes) if (s.layer === "front") this.drawFish(atlas, s);
+    }
 
     // pellets
-    ctx.fillStyle = "#b8783a";
-    for (const p of this.pellets) ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
-    // bubbles
+    for (const p of this.pellets) {
+      ctx.fillStyle = "#a86a30"; ctx.beginPath(); ctx.ellipse(p.x, p.y, 0.9, 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,220,170,0.6)"; ctx.beginPath(); ctx.arc(p.x - 0.25, p.y - 0.25, 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+    // bubbles: a thin ring with a highlight
     for (const b of this.bubbles) {
-      const x = Math.round(b.x), y = Math.round(b.y);
-      ctx.fillStyle = "#dff6ff";
-      if (b.r === 1) ctx.fillRect(x, y, 1, 1);
-      else { ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); ctx.fillRect(x, y + 1, 1, 1); ctx.fillStyle = "#ffffff"; ctx.fillRect(x - 1, y - 1, 1, 1); }
+      ctx.strokeStyle = "rgba(225,246,255,0.8)"; ctx.lineWidth = 0.35;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.arc(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.3, 0, Math.PI * 2); ctx.fill();
     }
     // front plant
     this.plant(104, BOWL.sandY + 3, 12, "#3a9c58", "#7ee39a", 2.1);
@@ -371,65 +428,75 @@ export class FishEngine {
     // dirt specks (only when quite dirty)
     if (dirt > 0.6) {
       const n = Math.floor((dirt - 0.6) / 0.4 * this.dirtSpecks.length);
-      ctx.fillStyle = "rgba(90,110,40,0.85)";
+      ctx.fillStyle = "rgba(90,110,40,0.8)";
       for (let i = 0; i < n; i++) {
         const s = this.dirtSpecks[i];
         const x = s.x + Math.sin(this.t * 0.7 + s.ph) * 3, y = s.y + Math.cos(this.t * 0.5 + s.ph) * 2;
-        if (this.inWater(x, y, 3)) ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+        if (this.inWater(x, y, 3)) { ctx.beginPath(); ctx.arc(x, y, 0.55, 0, Math.PI * 2); ctx.fill(); }
       }
     }
     // clean sparkles
-    for (const p of this.particles) { ctx.fillStyle = p.c; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+    for (const p of this.particles) {
+      ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 0.5 + p.ttl * 0.3, 0, Math.PI * 2); ctx.fill();
+    }
     if (this.cleanFlash > 0) {
       ctx.fillStyle = `rgba(230,255,255,${(this.cleanFlash * 0.35).toFixed(3)})`;
-      for (let y = BOWL.waterY; y < BOWL.sandY; y++) { const hw = halfW(y) - 2; ctx.fillRect(BOWL.cx - hw, y, hw * 2 + 1, 1); }
+      ctx.fillRect(0, BOWL.waterY, W, BOWL.sandY - BOWL.waterY);
     }
-    // glass shine (front)
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    for (let y = BOWL.rimY + 8; y < BOWL.rimY + 40; y++) { const hw = halfW(y); ctx.fillRect(BOWL.cx - hw + 3, y, 2, 1); }
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    for (let y = BOWL.rimY + 44; y < BOWL.rimY + 60; y++) { const hw = halfW(y); ctx.fillRect(BOWL.cx - hw + 5, y, 1, 1); }
-  }
+    ctx.restore();
 
-  /** Draw a 1px-wide run clipped to the inside of the glass on row y. */
-  private waterRect(x: number, y: number, w: number, c: string) {
-    const hw = halfW(y) - 3;
-    if (hw <= 0) return;
-    const x0 = Math.max(x, BOWL.cx - hw), x1 = Math.min(x + w, BOWL.cx + hw + 1);
-    if (x1 <= x0) return;
-    this.ctx.fillStyle = c;
-    this.ctx.fillRect(x0, y, x1 - x0, 1);
+    // ---- the glass ----
+    // inner shading: darker toward the right edge, brighter at the left (refraction)
+    ctx.save();
+    this.circle(r - 1.5); ctx.clip();
+    const shade = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.3, r * 0.2, cx, cy, r);
+    shade.addColorStop(0, "rgba(255,255,255,0.06)"); shade.addColorStop(0.75, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(0,0,30,0.28)");
+    ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    // wall: a ring with a light gradient
+    const wall = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    wall.addColorStop(0, "#e9f7ff"); wall.addColorStop(0.5, "#a9d8ea"); wall.addColorStop(1, "#7fb6cc");
+    ctx.strokeStyle = wall; ctx.lineWidth = 2.2;
+    this.circle(r - 0.4); ctx.stroke();
+    // rim (the lip of the bowl)
+    const rimHw = halfW(BOWL.rimY) + 2;
+    ctx.fillStyle = "#eaf8ff";
+    ctx.beginPath(); ctx.ellipse(cx, BOWL.rimY - 0.5, rimHw, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#2d2749";
+    ctx.beginPath(); ctx.ellipse(cx, BOWL.rimY - 0.5, rimHw - 2.2, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    // highlights
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.arc(cx, cy, r - 5, Math.PI * 1.08, Math.PI * 1.42); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, r - 5, Math.PI * 1.5, Math.PI * 1.62); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, r - 4, Math.PI * 0.12, Math.PI * 0.42); ctx.stroke();
   }
 
   private plant(x: number, baseY: number, h: number, dark: string, light: string, phase: number) {
-    for (let i = 0; i < h; i++) {
-      const y = baseY - i;
-      const sway = Math.round(Math.sin(this.t * 1.5 + phase + i * 0.25) * (i / h) * 2);
-      this.waterRect(x + sway, y, 2, i % 5 === 4 ? light : dark);
-      if (i % 4 === 1 && i > 3) this.waterRect(x + sway - 2, y, 2, light);
-      if (i % 4 === 3 && i > 3) this.waterRect(x + sway + 2, y, 2, light);
+    const ctx = this.ctx;
+    // stem: a swaying curve, with leaves budding off alternately
+    const sway = (i: number) => Math.sin(this.t * 1.5 + phase + i * 0.25) * (i / h) * 2.2;
+    ctx.strokeStyle = dark; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x, baseY);
+    for (let i = 1; i <= h; i++) ctx.lineTo(x + sway(i), baseY - i);
+    ctx.stroke();
+    for (let i = 4; i < h - 1; i += 3) {
+      const side = (i / 3) % 2 === 0 ? -1 : 1;
+      const sx = x + sway(i), sy = baseY - i;
+      const g = ctx.createLinearGradient(sx, sy, sx + side * 4, sy - 2);
+      g.addColorStop(0, dark); g.addColorStop(1, light);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(sx + side * 2.6, sy - 2.6, sx + side * 4.4, sy - 1.6);
+      ctx.quadraticCurveTo(sx + side * 2.4, sy - 0.2, sx, sy + 0.6);
+      ctx.closePath(); ctx.fill();
     }
   }
 
-  private drawFish(f: Fish) {
-    const sp = this.sprite;
-    const n = sp.frames.length;
-    const frame = sp.frames[((Math.floor(f.frameT) % n) + n) % n];
-    const w = spriteWidth(frame), h = spriteHeight(frame);
-    const bob = Math.round(Math.sin(f.bob) * 1.5);
-    const x = Math.round(f.x - w / 2), y = Math.round(f.y - h / 2) + bob;
-    const mood = this.inputs.mood;
-    const pal = moodPalette(this.inputs.species, mood);
-    drawSprite(this.ctx, frame, x, y, f.facing === -1, pal);
-    // mood details drawn over the sprite at the species' eye / mouth pixels
-    const col = (c: number) => (f.facing === 1 ? x + c : x + (w - 1 - c));
-    const [ec, er] = sp.eye, [mc, mr] = sp.mouth;
-    const ex = Math.min(col(ec), col(ec + 1)), ey = y + er;
-    this.ctx.fillStyle = pal.d ?? frame.palette.d;
-    if (mood === "sad" || mood === "bored") this.ctx.fillRect(ex, ey - 1, 2, 1); // droopy lid
-    if (mood === "sleepy" && Math.floor(this.t * 0.8) % 3 === 0) this.ctx.fillRect(ex, ey, 2, 1); // blink
-    if (mood === "hungry" && Math.floor(this.t * 3) % 2 === 0) { // gulping mouth
-      this.ctx.fillStyle = pal.m ?? frame.palette.m; this.ctx.fillRect(col(mc), y + mr + 1, 1, 1);
-    }
+  private drawFish(atlas: Atlas, f: Fish) {
+    const bob = Math.sin(f.bob) * 1.2;
+    this.painter.draw(this.ctx, atlas, this.inputs.species, this.inputs.mood, f.x, f.y + bob, f.facing, f.frameT, this.t);
   }
 }

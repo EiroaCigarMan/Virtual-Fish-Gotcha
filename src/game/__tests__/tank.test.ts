@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { SPECIES, SPECIES_FLAVOR, STRUCTURES, isSpeciesId, isStructureId } from "../catalog";
 import { defaultState, newFish, setStructure } from "../state";
 import { coerceState } from "../storage";
-import { SPECIES_SPRITES } from "../../canvas/sprites";
+import { FISH } from "../../canvas/atlas";
 import { STRUCTURE_REGISTRY } from "../../canvas/structures";
 
 describe("catalog", () => {
   test("every structure and species has a renderer and flavor", () => {
     for (const s of STRUCTURES) expect(STRUCTURE_REGISTRY[s.id]).toBeDefined();
-    for (const s of SPECIES) { expect(SPECIES_SPRITES[s.id]).toBeDefined(); expect(SPECIES_FLAVOR[s.id]).toBeDefined(); }
+    for (const s of SPECIES) { expect(FISH[s.id]).toBeDefined(); expect(SPECIES_FLAVOR[s.id]).toBeDefined(); }
     expect(STRUCTURES).toHaveLength(8);
     expect(SPECIES).toHaveLength(7);
   });
@@ -16,29 +16,22 @@ describe("catalog", () => {
     for (const s of STRUCTURES) {
       const b = STRUCTURE_REGISTRY[s.id].bounds;
       expect(b.y + b.h).toBe(124); // sand line
-      expect(b.x).toBeGreaterThanOrEqual(36);
-      expect(b.x + b.w).toBeLessThanOrEqual(124);
+      expect(b.x).toBeGreaterThanOrEqual(30); // sprite boxes may carry transparent margin
+      expect(b.x + b.w).toBeLessThanOrEqual(130);
       expect(b.y).toBeGreaterThanOrEqual(36); // below the water surface
     }
   });
 });
 
 describe("sprites", () => {
-  test("every frame is rectangular, frames share a size, eye/mouth land on the right pixels", () => {
+  test("every species has baked frames, and its eye, mouth and hit box lie inside the frame", () => {
     for (const s of SPECIES) {
-      const sp = SPECIES_SPRITES[s.id];
-      const w = sp.frames[0].rows[0].length, h = sp.frames[0].rows.length;
-      for (const f of sp.frames) {
-        expect(f.rows.length).toBe(h);
-        for (const row of f.rows) expect(row.length).toBe(w);
-        for (const row of f.rows) for (const ch of row) if (ch !== ".") expect(f.palette[ch]).toBeDefined();
-        const [ec, er] = sp.eye;
-        expect(f.rows[er][ec]).toBe("w");
-        expect(f.rows[er][ec + 1]).toBe("k");
-      }
-      // mouth may wobble a pixel on the tail-flick frame; the rest frame is the reference
-      const [mc, mr] = sp.mouth;
-      expect(sp.frames[0].rows[mr][mc]).toBe("m");
+      const sp = FISH[s.id];
+      expect(sp.frames).toBeGreaterThanOrEqual(2);
+      expect(sp.w).toBeGreaterThan(0); expect(sp.h).toBeGreaterThan(0);
+      for (const [x, y] of [sp.eye, sp.mouth]) { expect(x).toBeGreaterThan(0); expect(x).toBeLessThan(sp.w); expect(y).toBeGreaterThan(0); expect(y).toBeLessThan(sp.h); }
+      expect(sp.hit[0]).toBeLessThanOrEqual(sp.w); expect(sp.hit[1]).toBeLessThanOrEqual(sp.h);
+      expect(sp.hit[0]).toBeGreaterThan(sp.w * 0.5); // the body fills its frame, it is not a speck in a big box
     }
   });
 });

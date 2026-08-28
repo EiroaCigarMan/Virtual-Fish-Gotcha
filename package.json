@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "test": "bun test",
     "snapshot": "bun scripts/snapshot.ts",
+    "sprites": "bun scripts/sprites/build.ts",
+    "sprites:check": "bun scripts/sprites/build.ts --check",
+    "readme:images": "bun scripts/readmeImages.ts",
     "lint": "oxlint"
   },
   "dependencies": {

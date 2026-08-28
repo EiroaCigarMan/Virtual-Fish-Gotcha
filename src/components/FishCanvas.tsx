@@ -1,5 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
-import { FishEngine, H, W, type EngineInputs } from "../canvas/engine";
+import { FishEngine, H, PX, W, type EngineInputs } from "../canvas/engine";
+import { loadAtlas } from "../canvas/atlas";
+import { browserPlatform } from "../canvas/platform";
 
 export interface FishCanvasHandle {
   feed(): void;
@@ -14,11 +16,14 @@ export const FishCanvas = forwardRef<FishCanvasHandle, EngineInputs>(function Fi
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const engine = new FishEngine(canvas);
+    const engine = new FishEngine(canvas, browserPlatform);
     engineRef.current = engine;
     engine.setInputs(inputs);
     engine.start();
+    let alive = true;
+    loadAtlas(browserPlatform, import.meta.env.BASE_URL).then((atlas) => { if (alive) engine.setAtlas(atlas); }, (err) => console.error(err));
     return () => {
+      alive = false;
       engine.stop();
       engineRef.current = null;
     };
@@ -37,7 +42,7 @@ export const FishCanvas = forwardRef<FishCanvasHandle, EngineInputs>(function Fi
 
   return (
     <div className="bowl-frame">
-      <canvas ref={canvasRef} width={W} height={H} className="bowl-canvas" aria-label={`${inputs.species} bowl`} role="img" />
+      <canvas ref={canvasRef} width={W * PX} height={H * PX} className="bowl-canvas" aria-label={`${inputs.species} bowl`} role="img" />
     </div>
   );
 });

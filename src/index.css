@@ -28,7 +28,7 @@ body {
 @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
 
 .bowl-frame { border: 4px solid var(--panel-edge); background: #000; padding: 4px; border-radius: 4px; box-shadow: 0 0 0 4px #0b0a14, 0 12px 40px #0008; }
-.bowl-canvas { display: block; width: 100%; height: auto; aspect-ratio: 160 / 144; image-rendering: pixelated; image-rendering: crisp-edges; }
+.bowl-canvas { display: block; width: 100%; height: auto; aspect-ratio: 160 / 144; }
 
 .side { display: flex; flex-direction: column; gap: 14px; }
 .panel { background: var(--panel); border: 3px solid var(--panel-edge); border-radius: 4px; padding: 12px 14px; box-shadow: 0 0 0 3px #0b0a14; }
