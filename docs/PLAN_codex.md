@@ -1,9 +1,9 @@
-# tamagotchi-fish Plan
+# virtual-fish-gotcha Plan
 
 ## 1. File / Folder Structure
 
 ```text
-tamagotchi-fish/
+virtual-fish-gotcha/
   index.html
   package.json
   bun.lockb
@@ -558,7 +558,7 @@ For Clean:
 Persistence key:
 
 ```ts
-const STORAGE_KEY = "tamagotchi-fish:v1";
+const STORAGE_KEY = "virtual-fish-gotcha:v1";
 ```
 
 On every meaningful state update:
@@ -635,8 +635,8 @@ interface StoredFishGameState extends FishGameState {
 Create project:
 
 ```bash
-bun create vite tamagotchi-fish --template react-ts
-cd tamagotchi-fish
+bun create vite virtual-fish-gotcha --template react-ts
+cd virtual-fish-gotcha
 bun install
 bun dev
 ```

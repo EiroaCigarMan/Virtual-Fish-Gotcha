@@ -1,6 +1,8 @@
 import type { ActionName, StatName } from "./types";
 
-export const STORAGE_KEY = "tamagotchi-fish:v1";
+export const STORAGE_KEY = "virtual-fish-gotcha:v1";
+/** Key used before the 2026-08 rename; loadState adopts a save found here once, then removes it. */
+export const LEGACY_STORAGE_KEY = "tamagotchi-fish:v1";
 
 /** Stat points lost per real hour (also applied for time spent away). */
 export const DECAY_PER_HOUR: Record<StatName, number> = {

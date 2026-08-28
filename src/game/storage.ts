@@ -1,4 +1,4 @@
-import { STORAGE_KEY } from "./constants";
+import { LEGACY_STORAGE_KEY, STORAGE_KEY } from "./constants";
 import { applyDecay, clamp, defaultState } from "./state";
 import { DEFAULT_SPECIES, DEFAULT_STRUCTURE, isSpeciesId, isStructureId } from "./catalog";
 import type { GameState } from "./types";
@@ -32,10 +32,24 @@ function coerce(raw: unknown, now: number): GameState | null {
 /** Exposed for tests. */
 export const coerceState = coerce;
 
+/**
+ * Raw save text under the current key. If there is none but a pre-rename save exists, adopt it:
+ * copy it under the new key and remove the old one, so nobody loses a fish to the rename.
+ */
+export function readSaveText(): string | null {
+  const text = localStorage.getItem(STORAGE_KEY);
+  if (text !== null) return text;
+  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (legacy === null) return null;
+  localStorage.setItem(STORAGE_KEY, legacy);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  return legacy;
+}
+
 /** Load and apply offline decay. Falls back to a fresh fish on missing/corrupt data. */
 export function loadState(now = Date.now()): GameState {
   try {
-    const text = localStorage.getItem(STORAGE_KEY);
+    const text = readSaveText();
     if (!text) return defaultState(now);
     const parsed = coerce(JSON.parse(text), now);
     return parsed ? applyDecay(parsed, now) : defaultState(now);
@@ -55,6 +69,7 @@ export function saveState(state: GameState): void {
 export function clearState(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     /* ignore */
   }

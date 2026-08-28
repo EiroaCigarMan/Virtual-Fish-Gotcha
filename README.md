@@ -1,6 +1,6 @@
-# 🐠 tamagotchi-fish
+# 🐠 virtual-fish-gotcha
 
-A cozy, 8-bit fish tamagotchi that lives in your browser. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and eight structures.
+A cozy, 8-bit virtual fish that lives in your browser. Feed it, play with it, keep its bowl clean — and read the time off the little landmark it swims around. Pick from seven fish and eight structures.
 
 <p align="center"><img src="docs/img/goldfish-bowl.png" width="480" alt="Pixel-art goldfish swimming in a round bowl above a castle whose clock reads 5:30"></p>
 
@@ -16,7 +16,7 @@ A cozy, 8-bit fish tamagotchi that lives in your browser. Feed it, play with it,
 
 ## Run it
 
-**Live:** https://eiroacigarman.github.io/Tamagotchi-Fish/ (auto-deployed from `main` by GitHub Actions → Pages)
+**Live:** https://eiroacigarman.github.io/Virtual-Fish-Gotcha/ (auto-deployed from `main` by GitHub Actions → Pages)
 
 Requires Node ≥ 20 **or** Bun. No other setup, no accounts, no backend.
 
@@ -82,4 +82,4 @@ src/
 
 ## Verify offline decay yourself
 
-Open DevTools → Application → Local Storage → `tamagotchi-fish:v1`, set `lastSeenAt` to a timestamp a day ago, reload.
+Open DevTools → Application → Local Storage → `virtual-fish-gotcha:v1`, set `lastSeenAt` to a timestamp a day ago, reload.

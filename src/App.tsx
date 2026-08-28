@@ -28,7 +28,7 @@ export default function App() {
   return (
     <main className="app">
       <header className="hdr">
-        <h1>🐠 tamagotchi-fish</h1>
+        <h1>🐠 virtual-fish-gotcha</h1>
         <p className="sub">a tiny {species.label.toLowerCase()} who lives in your browser</p>
       </header>
       <div className="layout">

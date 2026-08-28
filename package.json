@@ -1,5 +1,5 @@
 {
-  "name": "tamagotchi-fish",
+  "name": "virtual-fish-gotcha",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -28,5 +28,5 @@
   "engines": {
     "node": ">=20"
   },
-  "description": "A cozy 8-bit fish tamagotchi — seven fish, eight landmark clocks — in your browser."
+  "description": "A cozy 8-bit virtual fish — seven fish, eight landmark clocks — in your browser."
 }
